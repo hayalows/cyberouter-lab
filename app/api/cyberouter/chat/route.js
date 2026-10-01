@@ -6,6 +6,7 @@ import {
   keyFromRequest,
   validateMessages,
 } from "@/lib/cyberouter";
+import { redactSensitiveText } from "@/lib/sensitive-content";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -29,7 +30,11 @@ export async function POST(request) {
     return NextResponse.json({ error: "Messages are missing, invalid, or too large." }, { status: 400 });
   }
 
-  const body = buildChatBody({ model, messages, maxTokens, temperature });
+  const redactedMessages = messages.map((message) => ({
+    ...message,
+    content: redactSensitiveText(message.content).text,
+  }));
+  const body = buildChatBody({ model, messages: redactedMessages, maxTokens, temperature });
   const result = await cyberouterFetch("/chat/completions", {
     key,
     method: "POST",

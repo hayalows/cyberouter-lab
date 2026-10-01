@@ -9,8 +9,9 @@ A Vercel-hosted security workspace for Enclave Cyberouter.
 - read-only GitHub repository mapping
 - Quick Scan across up to 18 security-ranked source/config files
 - Deep Audit across up to 48 security-ranked files in multiple model passes
+- custom scan scope with path filtering and exact file selection
 - pull-request security review from a GitHub PR diff
-- simple local secret-pattern checks with values redacted before reporting
+- best-effort local redaction for common credential formats before model review
 - bounded public-website security assessment with SSRF protections
 - verified active web checks gated by a file challenge on the target domain
 - optional website-to-repository correlation using security-relevant source files
@@ -31,6 +32,11 @@ GitHub token:
 - sessionStorage only
 - use a fine-grained token scoped to the specific repositories you want to scan
 - recommended permissions: Contents: Read and Pull requests: Read
+
+Source and evidence handling:
+- repository files, pull-request diffs, and supplied code/evidence are sent to the selected Cyberouter model for review
+- common credential patterns are redacted in the browser first; the chat API and MCP route repeat the best-effort check server-side
+- pattern-based redaction cannot identify every secret format, so review the scope and avoid scanning data you are not allowed to share
 
 Repository access is read-only. The site does not commit, push, merge, deploy, or modify target repositories.
 

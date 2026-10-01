@@ -34,33 +34,26 @@ export default function WorkspaceOverview({
   return (
     <section className="overview-grid" aria-label="Workspace status">
       <Card
-        eyebrow="Cyberouter"
-        value={connected ? "Connected" : "Not connected"}
-        detail={connected ? (model || "Model available") : "Add your API key to start"}
+        eyebrow="MODEL CONNECTION"
+        value={connected ? "Ready" : "Needs setup"}
+        detail={connected ? (model || "Choose a model for your review") : "Connect your key to run an analysis"}
         state={connected ? "good" : "attention"}
-        action={connected ? "Manage connection" : "Connect"}
+        action={connected ? "Manage models" : "Connect a key"}
         onClick={() => onNavigate("connection")}
       />
       <Card
-        eyebrow="Source"
-        value={repoName || "No repository"}
-        detail={repoName ? "Ready for quick, deep, or PR review" : "Map a GitHub codebase"}
-        action={repoName ? "Open repository" : "Choose repository"}
+        eyebrow="SOURCE REVIEW"
+        value={repoName || "No repository loaded"}
+        detail={repoName ? "Quick scan, deep audit, or PR review" : "Map a GitHub repository"}
+        action={repoName ? "Open source review" : "Load a repository"}
         onClick={() => onNavigate("repositories")}
       />
       <Card
-        eyebrow="Live target"
-        value={siteTarget || "No website"}
-        detail={siteTarget ? "Ready for bounded web testing" : "Assess a public or staging URL"}
-        action={siteTarget ? "Open website scan" : "Add website"}
+        eyebrow="WEB ASSESSMENT"
+        value={siteTarget || "No target loaded"}
+        detail={siteTarget ? "Bounded checks for this public target" : "Assess a public or staging URL"}
+        action={siteTarget ? "Open website assessment" : "Add a target"}
         onClick={() => onNavigate("website")}
-      />
-      <Card
-        eyebrow="Workflow"
-        value="Code + web"
-        detail="Correlate source findings with live evidence"
-        action="Run focused task"
-        onClick={() => onNavigate(repoName ? "repositories" : "website")}
       />
     </section>
   );

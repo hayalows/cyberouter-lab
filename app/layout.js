@@ -1,8 +1,8 @@
 import "./globals.css";
 
 export const metadata = {
-  title: "Cyberouter Lab",
-  description: "A private browser-side workspace and remote MCP bridge for Enclave Cyberouter.",
+  title: "Cyberouter Lab — Security Workbench",
+  description: "Review GitHub code, pull requests, and bounded public website assessments with Cyberouter models.",
 };
 
 export default function RootLayout({ children }) {

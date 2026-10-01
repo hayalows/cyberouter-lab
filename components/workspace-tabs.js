@@ -13,15 +13,14 @@ export default function WorkspaceTabs({ value, onChange }) {
   const reduceMotion = useReducedMotion();
 
   return (
-    <nav className="workspace-tabs" aria-label="Cyberouter workspace" role="tablist">
+    <nav className="workspace-tabs" aria-label="Main workspace">
       {ITEMS.map((item) => {
         const active = value === item.id;
         return (
           <button
             key={item.id}
             type="button"
-            role="tab"
-            aria-selected={active}
+            aria-current={active ? "page" : undefined}
             className={active ? "workspace-tab active" : "workspace-tab"}
             onClick={() => onChange(item.id)}
           >

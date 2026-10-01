@@ -2,6 +2,7 @@ import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { z } from "zod";
 import { buildChatBody, cyberouterFetch, errorMessage, validateKey } from "@/lib/cyberouter";
 import { auditPublicSite } from "@/lib/site-audit";
+import { redactSensitiveText } from "@/lib/sensitive-content";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,9 +13,10 @@ function tokenFromContext(ctx) {
 }
 
 async function callChat(key, { model, system, prompt, maxTokens = 2400 }) {
+  const safePrompt = redactSensitiveText(prompt);
   const messages = [];
   if (system) messages.push({ role: "system", content: system });
-  messages.push({ role: "user", content: prompt });
+  messages.push({ role: "user", content: safePrompt.text });
 
   const result = await cyberouterFetch("/chat/completions", {
     key,
@@ -29,9 +31,11 @@ async function callChat(key, { model, system, prompt, maxTokens = 2400 }) {
   return {
     content: [{
       type: "text",
-      text: usage
-        ? `${responseText}\n\nUsage: ${JSON.stringify(usage)}`
-        : responseText,
+      text: [
+        responseText,
+        safePrompt.redactionCount ? `Privacy note: ${safePrompt.redactionCount} likely credential value${safePrompt.redactionCount === 1 ? " was" : "s were"} redacted before model review.` : "",
+        usage ? `Usage: ${JSON.stringify(usage)}` : "",
+      ].filter(Boolean).join("\n\n"),
     }],
   };
 }

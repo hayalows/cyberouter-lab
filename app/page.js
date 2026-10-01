@@ -6,6 +6,7 @@ import remarkGfm from "remark-gfm";
 import WorkspaceTabs from "@/components/workspace-tabs";
 import ActionButton from "@/components/action-button";
 import WorkspaceOverview from "@/components/workspace-overview";
+import { detectSensitiveSignals, redactSensitiveText } from "@/lib/sensitive-content";
 
 const MODES = {
   ask: {
@@ -25,6 +26,29 @@ const MODES = {
     title: "Pressure-test a suspected finding",
     helper: "Check whether another scanner or model's finding is actually supported.",
     placeholder: "Describe the suspected vulnerability or finding…",
+  },
+};
+
+const SURFACE_COPY = {
+  repositories: {
+    eyebrow: "SOURCE SECURITY",
+    title: "Review a codebase with evidence.",
+    description: "Map a GitHub repository, focus coverage on high-risk paths, and get a report you can verify and share.",
+  },
+  website: {
+    eyebrow: "WEB SECURITY",
+    title: "Check the public attack surface.",
+    description: "Start with read-only checks, then prove domain control before the bounded active probes.",
+  },
+  playground: {
+    eyebrow: "MODEL WORKSPACE",
+    title: "Ask, review, or pressure-test a finding.",
+    description: "Give the selected model a focused task, relevant context, and evidence it can actually inspect.",
+  },
+  connection: {
+    eyebrow: "WORKSPACE SETUP",
+    title: "Connect the tools you trust.",
+    description: "Your Cyberouter key is held in this browser and sent through this app when you make a request. Common credential patterns are redacted before model review.",
   },
 };
 
@@ -135,29 +159,22 @@ function batchFiles(files, budget = 32000) {
   return groups;
 }
 
-function redactSignal(line) {
-  return line.replace(/([=:]\s*)[^\s"']{8,}/g, "$1[REDACTED]");
-}
-
 function localSecretSignals(files) {
-  const patterns = [
-    /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/i,
-    /(?:api[_-]?key|secret|token|password)\s*[:=]\s*["'][^"']{8,}["']/i,
-    /gh[pousr]_[A-Za-z0-9_]{20,}/,
-    /sk-[A-Za-z0-9_-]{20,}/,
-  ];
   const hits = [];
   for (const file of files) {
     if (!file?.content) continue;
-    const lines = file.content.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      if (patterns.some((pattern) => pattern.test(lines[i]))) {
-        hits.push({ path: file.path, line: i + 1, preview: redactSignal(lines[i].trim()).slice(0, 140) });
-        if (hits.length >= 20) return hits;
-      }
+    for (const signal of detectSensitiveSignals(file.content)) {
+      hits.push({ path: file.path, line: signal.line, kind: signal.kind });
+      if (hits.length >= 40) return hits;
     }
   }
   return hits;
+}
+
+function credentialRedactionNote(count) {
+  return count
+    ? `${count} likely credential value${count === 1 ? " was" : "s were"} redacted locally before model review.`
+    : "No common credential patterns matched in the reviewed material.";
 }
 
 export default function Home() {
@@ -177,7 +194,9 @@ export default function Home() {
   const [result, setResult] = useState("");
   const [usage, setUsage] = useState(null);
   const [error, setError] = useState("");
-  const [copied, setCopied] = useState(false);
+  const [copiedMcp, setCopiedMcp] = useState(false);
+  const [copiedConfig, setCopiedConfig] = useState(false);
+  const [copiedReport, setCopiedReport] = useState(false);
 
   const [repoInput, setRepoInput] = useState("");
   const [repoRef, setRepoRef] = useState("");
@@ -186,9 +205,13 @@ export default function Home() {
   const [repoBusy, setRepoBusy] = useState(false);
   const [repoProgress, setRepoProgress] = useState("");
   const [scanKind, setScanKind] = useState("quick");
+  const [customScope, setCustomScope] = useState(false);
+  const [selectedPaths, setSelectedPaths] = useState([]);
+  const [fileFilter, setFileFilter] = useState("");
   const [prNumber, setPrNumber] = useState("");
   const [sessionHistory, setSessionHistory] = useState([]);
   const [resultSource, setResultSource] = useState("none");
+  const [resultNotice, setResultNotice] = useState("");
 
   const [siteTarget, setSiteTarget] = useState("");
   const [siteMode, setSiteMode] = useState("passive");
@@ -223,6 +246,14 @@ export default function Home() {
         : resultSource === "playground"
           ? "Cyberouter response"
           : "Security report";
+  const surfaceCopy = SURFACE_COPY[surface] || SURFACE_COPY.repositories;
+  const scanLimit = scanKind === "deep" ? 48 : 18;
+  const candidates = repoData?.tree?.candidates || [];
+  const recommendedFiles = selectAuditFiles(candidates, scanLimit);
+  const matchingCandidates = customScope
+    ? candidates.filter((item) => item.path.toLowerCase().includes(fileFilter.trim().toLowerCase()))
+    : recommendedFiles;
+  const visibleCandidates = customScope ? matchingCandidates.slice(0, 80) : recommendedFiles.slice(0, 10);
 
   async function cyberApi(path, init = {}) {
     const response = await fetch(path, {
@@ -325,15 +356,25 @@ export default function Home() {
     setBusy(true);
     setError("");
     setResult("");
+    setResultNotice("");
+    setResultSource("none");
     setUsage(null);
     try {
+      const safeMessages = messages.map((message) => {
+        const redacted = redactSensitiveText(message.content);
+        return { ...message, content: redacted.text, redactionCount: redacted.redactionCount };
+      });
+      const redactionCount = safeMessages.reduce((total, message) => total + message.redactionCount, 0);
       const data = await cyberApi("/api/cyberouter/chat", {
         method: "POST",
-        body: JSON.stringify({ model, messages, maxTokens, temperature: 0.1 }),
+        body: JSON.stringify({ model, messages: safeMessages.map(({ role, content }) => ({ role, content })), maxTokens, temperature: 0.1 }),
       });
       setResult(extractText(data) || "Cyberouter returned a response, but no text message was found.");
       setUsage(data?.usage || null);
       setResultSource("playground");
+      setResultNotice(redactionCount
+        ? `${redactionCount} likely credential value${redactionCount === 1 ? " was" : "s were"} redacted in this request before it reached the model.`
+        : "Common credential patterns are checked locally before model review. This check cannot detect every secret format.");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -355,6 +396,9 @@ export default function Home() {
       const data = await githubApi(`/api/github/repo?${params}`);
       setRepoData(data);
       setRepoRef(data.repository.ref);
+      setCustomScope(false);
+      setSelectedPaths([]);
+      setFileFilter("");
       setRepoProgress("");
     } catch (err) {
       setRepoData(null);
@@ -363,6 +407,14 @@ export default function Home() {
     } finally {
       setRepoBusy(false);
     }
+  }
+
+  function toggleFileScope(path) {
+    setSelectedPaths((previous) => {
+      if (previous.includes(path)) return previous.filter((item) => item !== path);
+      if (previous.length >= scanLimit) return previous;
+      return [...previous, path];
+    });
   }
 
   async function getFiles(paths) {
@@ -385,33 +437,44 @@ export default function Home() {
   }
 
   async function modelCall(messages, outputTokens = 2600) {
+    const safeMessages = messages.map((message) => {
+      const redacted = redactSensitiveText(message.content);
+      return { role: message.role, content: redacted.text, redactionCount: redacted.redactionCount };
+    });
+    const redactionCount = safeMessages.reduce((total, message) => total + message.redactionCount, 0);
     const data = await cyberApi("/api/cyberouter/chat", {
       method: "POST",
       body: JSON.stringify({
         model,
-        messages,
+        messages: safeMessages.map(({ role, content }) => ({ role, content })),
         maxTokens: outputTokens,
         temperature: 0.05,
       }),
     });
-    return { text: extractText(data), usage: data?.usage || null };
+    return { text: extractText(data), usage: data?.usage || null, redactionCount };
   }
 
   async function scanRepository(kind = scanKind) {
     if (!connected) return setError("Connect Cyberouter before scanning a repository.");
     if (!repoData) return setError("Load a repository first.");
     if (!model) return setError("Choose a Cyberouter model.");
+    if (customScope && selectedPaths.length === 0) return setError("Choose at least one file, or switch back to recommended coverage.");
+    const limit = kind === "deep" ? 48 : 18;
+    if (customScope && selectedPaths.length > limit) return setError(`This ${kind === "deep" ? "deep audit" : "quick scan"} can review up to ${limit} selected files. Remove ${selectedPaths.length - limit} file${selectedPaths.length - limit === 1 ? "" : "s"} or choose the deeper audit.`);
 
     setRepoBusy(true);
     setError("");
     setResult("");
+    setResultNotice("");
+    setResultSource("none");
     setUsage(null);
     setScanKind(kind);
 
     try {
       const candidates = repoData.tree.candidates || [];
-      const limit = kind === "deep" ? 48 : 18;
-      const selected = selectAuditFiles(candidates, limit);
+      const selected = customScope
+        ? candidates.filter((item) => selectedPaths.includes(item.path))
+        : selectAuditFiles(candidates, limit);
       const chosen = selected.map((item) => item.path);
       setRepoProgress(`Preparing ${kind === "deep" ? "deep audit" : "quick scan"} · ${chosen.length} files`);
       const files = await getFiles(chosen);
@@ -419,7 +482,12 @@ export default function Home() {
       if (!readable.length) throw new Error("No readable source files were returned.");
 
       const secretHits = localSecretSignals(readable);
-      const batches = batchFiles(readable, kind === "deep" ? 30000 : 38000);
+      const redactedFiles = readable.map((file) => {
+        const redacted = redactSensitiveText(file.content);
+        return { ...file, content: redacted.text, redactionCount: redacted.redactionCount };
+      });
+      const redactionCount = redactedFiles.reduce((total, file) => total + file.redactionCount, 0);
+      const batches = batchFiles(redactedFiles, kind === "deep" ? 30000 : 38000);
       const findings = [];
       const manifest = candidates.slice(0, 100).map((item) => item.path).join("\n");
 
@@ -441,8 +509,8 @@ export default function Home() {
 
       setRepoProgress("Consolidating findings…");
       const localSignalsText = secretHits.length
-        ? secretHits.map((h) => `${h.path}:${h.line} ${h.preview}`).join("\n")
-        : "No simple local secret-pattern signals were detected in the files reviewed.";
+        ? secretHits.map((h) => `${h.path}:${h.line} — ${h.kind}; matched value withheld`).join("\n")
+        : "No common local credential patterns were detected in the files reviewed.";
 
       const synthesisInput = findings.map((text, i) => `=== REVIEW BATCH ${i + 1} ===\n${text.slice(0, 12000)}`).join("\n\n");
       const synthesis = await modelCall([
@@ -460,6 +528,7 @@ export default function Home() {
       setResult(finalText);
       setUsage(synthesis.usage);
       setResultSource("repo");
+      setResultNotice(`${kind === "deep" ? "Deep audit" : "Quick scan"} reviewed ${readable.length} file${readable.length === 1 ? "" : "s"} of ${repoData.tree.reviewableFiles} mapped reviewable files${customScope ? " using your selected paths" : " using recommended security-ranked paths"}. ${credentialRedactionNote(redactionCount)} Common patterns only; check the selected files and report before sharing.`);
       setSessionHistory((items) => [{
         id: Date.now(),
         kind,
@@ -468,6 +537,7 @@ export default function Home() {
         model,
         files: readable.length,
         secretSignals: secretHits.length,
+        scope: customScope ? "custom" : "recommended",
       }, ...items].slice(0, 8));
       setRepoProgress(`Finished · ${readable.length} files reviewed`);
     } catch (err) {
@@ -487,6 +557,8 @@ export default function Home() {
     setRepoBusy(true);
     setError("");
     setResult("");
+    setResultNotice("");
+    setResultSource("none");
     setRepoProgress(`Loading PR #${number}…`);
     try {
       const repo = repoData.repository;
@@ -494,8 +566,9 @@ export default function Home() {
       const pr = await githubApi(`/api/github/pr?${params}`);
       setRepoProgress(`Reviewing PR #${number} with Cyberouter…`);
 
+      const safeDiff = redactSensitiveText(pr.diff);
       const chunks = [];
-      for (let i = 0; i < pr.diff.length; i += 38000) chunks.push(pr.diff.slice(i, i + 38000));
+      for (let i = 0; i < safeDiff.text.length; i += 38000) chunks.push(safeDiff.text.slice(i, i + 38000));
       const outputs = [];
       for (let i = 0; i < chunks.length; i++) {
         setRepoProgress(`Reviewing PR #${number} · chunk ${i + 1}/${chunks.length}`);
@@ -524,6 +597,7 @@ export default function Home() {
       }
       setResult(final || "No textual review was returned.");
       setResultSource("pr");
+      setResultNotice(`${pr.pullRequest.changedFiles} changed files in PR #${number}. ${credentialRedactionNote(safeDiff.redactionCount)}${pr.truncated ? " GitHub capped the diff at 500,000 characters, so this review is incomplete; inspect the full diff before merging." : ""}`);
       setRepoProgress(`Finished PR #${number} review`);
       setSessionHistory((items) => [{
         id: Date.now(),
@@ -621,6 +695,8 @@ export default function Home() {
     setSiteBusy(true);
     setError("");
     setResult("");
+    setResultNotice("");
+    setResultSource("none");
     setUsage(null);
     setSiteScan(null);
     setSiteProgress(siteMode === "active" ? "Verifying target ownership…" : "Mapping public attack surface…");
@@ -648,11 +724,15 @@ export default function Home() {
           `\`${siteToken}\``,
         ].join("\n"));
         setResultSource("website");
+        setResultNotice("The active checks stopped because the target ownership file did not match. No active probes were run.");
         setSiteProgress("Verification did not pass");
         return;
       }
 
       let repoContext = "";
+      let redactionCount = 0;
+      const safeEvidence = redactSensitiveText(JSON.stringify(scan));
+      redactionCount += safeEvidence.redactionCount;
       if (correlateRepo && repoData?.tree?.candidates?.length) {
         setSiteProgress("Reading linked repository context…");
         const selected = selectAuditFiles(repoData.tree.candidates, 8);
@@ -668,7 +748,11 @@ export default function Home() {
         });
         repoContext = (fileData.files || [])
           .filter((item) => item.content)
-          .map((item) => `===== ${item.path} =====\n${item.content}`)
+          .map((item) => {
+            const redacted = redactSensitiveText(item.content);
+            redactionCount += redacted.redactionCount;
+            return `===== ${item.path} =====\n${redacted.text}`;
+          })
           .join("\n\n")
           .slice(0, 30000);
       }
@@ -684,7 +768,7 @@ export default function Home() {
           },
           {
             role: "user",
-            content: `Website evidence:\n${JSON.stringify(scan).slice(0, 62000)}${repoContext ? `\n\nLinked repository: ${repoData.repository.fullName}@${repoData.repository.ref}\nUse the source excerpts only to correlate web observations with likely implementation points.\n\n${repoContext}` : ""}`,
+            content: `Website evidence:\n${safeEvidence.text.slice(0, 62000)}${repoContext ? `\n\nLinked repository: ${repoData.repository.fullName}@${repoData.repository.ref}\nUse the source excerpts only to correlate web observations with likely implementation points.\n\n${repoContext}` : ""}`,
           },
         ], 4200);
         report = response.text || "";
@@ -696,6 +780,7 @@ export default function Home() {
       setResult(report || localSiteMarkdown(scan));
       setUsage(reportUsage);
       setResultSource("website");
+      setResultNotice(`${scan.summary?.pagesScanned || 0} page${scan.summary?.pagesScanned === 1 ? "" : "s"} checked with ${siteMode === "active" ? "verified active probes" : "passive GET checks"}. ${credentialRedactionNote(redactionCount)} Findings describe the observed scope, not a full penetration test.`);
       setSiteProgress(`Finished · ${scan.summary?.pagesScanned || 0} pages · ${scan.findings?.length || 0} deterministic observations`);
     } catch (err) {
       setSiteProgress("");
@@ -708,8 +793,8 @@ export default function Home() {
   async function copyReport() {
     if (!result) return;
     await navigator.clipboard.writeText(result);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1400);
+    setCopiedReport(true);
+    setTimeout(() => setCopiedReport(false), 1600);
   }
 
   function downloadReport() {
@@ -729,15 +814,15 @@ export default function Home() {
 
   async function copyMcp() {
     await navigator.clipboard.writeText(`${window.location.origin}/api/mcp`);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1400);
+    setCopiedMcp(true);
+    setTimeout(() => setCopiedMcp(false), 1600);
   }
 
   async function copyCodexConfig() {
     const config = `[mcp_servers.cyberouter]\nurl = "${window.location.origin}/api/mcp"\nbearer_token_env_var = "CYBEROUTER_API_KEY"`;
     await navigator.clipboard.writeText(config);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1400);
+    setCopiedConfig(true);
+    setTimeout(() => setCopiedConfig(false), 1600);
   }
 
   return (
@@ -751,21 +836,24 @@ export default function Home() {
           </div>
         </div>
         <div className="topbar-actions">
-          <button className="ghost compact-control" onClick={copyMcp}>{copied ? "Copied" : "Copy MCP"}</button>
-          <div className={`status-pill ${connected ? "ok" : ""}`} aria-live="polite"><span className="status-dot" />{status}</div>
+          <button type="button" className="ghost compact-control" onClick={copyMcp}>{copiedMcp ? "MCP URL copied" : "MCP endpoint"}</button>
+          <button type="button" className={`status-pill ${connected ? "ok" : ""}`} aria-live="polite" onClick={() => setSurface("connection")} aria-label={`${status}. Open connection settings`}>
+            <span className="status-dot" />{status}<span className="status-action-hint">Manage</span>
+          </button>
         </div>
       </header>
 
       <section className="workspace-intro">
         <div className="workspace-intro-copy">
-          <div className="eyebrow">CYBEROUTER SECURITY WORKSPACE</div>
-          <h1>Inspect code. Test the live surface. Verify what matters.</h1>
-          <p>Move between repository review, bounded website testing, and focused model analysis without losing your current context.</p>
+          <div className="eyebrow">{surfaceCopy.eyebrow}</div>
+          <h1>{surfaceCopy.title}</h1>
+          <p>{surfaceCopy.description}</p>
         </div>
         <div className="workspace-intro-note">
-          <span className="card-kicker">REMOTE MCP</span>
-          <strong>/api/mcp</strong>
-          <p>Use Cyberouter as a security specialist from Codex while Codex keeps the working repository context.</p>
+          <span className="card-kicker">MODEL CONNECTION</span>
+          <strong>{connected ? model || "Models ready" : "Connect to begin"}</strong>
+          <p>{connected ? `${models.length} model${models.length === 1 ? "" : "s"} available · common credentials are redacted before review` : "Use your own Cyberouter key. It is stored in this browser and sent through this app to Cyberouter for requests."}</p>
+          {!connected && <button type="button" className="text-button" onClick={() => setSurface("connection")}>Set up connection <span aria-hidden="true">↗</span></button>}
         </div>
       </section>
 
@@ -779,11 +867,13 @@ export default function Home() {
 
       <WorkspaceTabs value={surface} onChange={setSurface} />
 
+      {error && <div className="error-box global-error" role="alert"><span>{error}</span><button type="button" className="error-dismiss" onClick={() => setError("")}>Dismiss</button></div>}
+
       {surface === "connection" && (
         <section className="grid connection-grid">
           <aside className="panel key-panel">
             <div className="panel-head"><div><span className="step">01</span><h2>Cyberouter</h2></div>{connected && <button className="text-button" onClick={disconnect}>Disconnect</button>}</div>
-            <label className="field"><span>Cyberouter API key</span><input type="password" autoComplete="off" spellCheck="false" value={apiKey} placeholder="Paste your key" onChange={(e) => setApiKey(e.target.value)} /></label>
+            <label className="field"><span>Cyberouter API key</span><input type="password" autoComplete="new-password" spellCheck="false" value={apiKey} placeholder="Paste your key" onChange={(e) => setApiKey(e.target.value)} /></label>
             <label className="check-row"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /><span>Remember on this device<small>Off keeps it only until this browser session ends.</small></span></label>
             <ActionButton
               busy={busy}
@@ -792,19 +882,20 @@ export default function Home() {
               busyLabel={connected ? "Refreshing models…" : "Checking key…"}
               onClick={connect}
             />
-            <div className="privacy-note"><span>Key handling</span><p>No database. The key is forwarded only to the fixed Cyberouter API when you make a request.</p></div>
+            <div className="privacy-note"><span>Key handling</span><p>The key is stored in this browser only and sent through this app to the fixed Cyberouter API when you run a request.</p></div>
           </aside>
 
           <section className="panel work-panel">
             <div className="panel-head"><div><span className="step">02</span><h2>GitHub access</h2></div></div>
-            <label className="field"><span>Fine-grained GitHub token <em>optional</em></span><input type="password" autoComplete="off" value={githubToken} placeholder="Only needed for private repos" onChange={(e) => setGithubToken(e.target.value)} /></label>
-            <div className="privacy-note"><span>Recommended permission</span><p>Use a fine-grained token scoped only to repositories you want to scan, with Contents: Read and Pull requests: Read. It is kept in sessionStorage only and is not committed or stored server-side.</p></div>
+            <label className="field"><span>Fine-grained GitHub token <em>optional</em></span><input type="password" autoComplete="new-password" value={githubToken} placeholder="Only needed for private repos" onChange={(e) => setGithubToken(e.target.value)} /></label>
+            <div className="privacy-note"><span>Before a model review</span><p>Selected code, diffs, or web evidence go to the Cyberouter model you choose. Common credential formats are redacted locally first; this heuristic cannot catch every secret. GitHub access is read-only.</p></div>
+            <div className="privacy-note"><span>Recommended GitHub permission</span><p>Use a fine-grained token scoped to the repositories you want to scan, with Contents: Read and Pull requests: Read. It stays in sessionStorage for this browser session.</p></div>
             {connected && <div className="model-cloud">{models.map((item) => <span key={item}>{item}</span>)}</div>}
             <div className="codex-box">
               <span className="scan-label">CODEX MCP</span>
               <strong>Use Cyberouter beside Codex</strong>
               <p>Codex keeps its OpenAI model as the main agent and can call these Cyberouter models through the MCP tools. They do not become entries in Codex's native model picker.</p>
-              <button className="ghost" onClick={copyCodexConfig}>{copied ? "Copied" : "Copy Codex config"}</button>
+              <button type="button" className="ghost" onClick={copyCodexConfig}>{copiedConfig ? "Codex config copied" : "Copy Codex config"}</button>
             </div>
           </section>
         </section>
@@ -816,7 +907,7 @@ export default function Home() {
             <div className="panel-head"><div><span className="step">01</span><h2>Target</h2></div></div>
             <label className="field">
               <span>Website URL</span>
-              <input value={siteTarget} placeholder="https://staging.example.com" onChange={(e) => { setSiteTarget(e.target.value); setSiteScan(null); }} />
+              <input type="text" inputMode="url" autoComplete="url" value={siteTarget} placeholder="https://staging.example.com" onChange={(e) => { setSiteTarget(e.target.value); setSiteScan(null); }} />
             </label>
             <div className="privacy-note">
               <span>Hosted scanner boundary</span>
@@ -833,19 +924,19 @@ export default function Home() {
           <section className="panel site-main">
             <div className="panel-head">
               <div><span className="step">02</span><h2>Website assessment</h2></div>
-              <select className="model-select" value={model} onChange={(e) => setModel(e.target.value)} disabled={!connected}>
+              <select className="model-select" aria-label="Cyberouter model" value={model} onChange={(e) => setModel(e.target.value)} disabled={!connected}>
                 {!connected && <option>Connect Cyberouter</option>}
                 {models.map((item) => <option value={item} key={item}>{item}</option>)}
               </select>
             </div>
 
             <div className="scan-cards">
-              <button className={`scan-card ${siteMode === "passive" ? "selected" : ""}`} onClick={() => setSiteMode("passive")}>
+              <button type="button" aria-pressed={siteMode === "passive"} className={`scan-card ${siteMode === "passive" ? "selected" : ""}`} onClick={() => setSiteMode("passive")}>
                 <span className="scan-label">PASSIVE ASSESSMENT</span>
                 <strong>Public attack-surface review</strong>
                 <p>GET-only crawl of up to 6 same-host pages, browser security headers, cookies, forms, mixed content, security.txt and robots.txt.</p>
               </button>
-              <button className={`scan-card ${siteMode === "active" ? "selected" : ""}`} onClick={() => setSiteMode("active")}>
+              <button type="button" aria-pressed={siteMode === "active"} className={`scan-card ${siteMode === "active" ? "selected" : ""}`} onClick={() => setSiteMode("active")}>
                 <span className="scan-label">VERIFIED ACTIVE</span>
                 <strong>Ownership-gated checks</strong>
                 <p>Requires a file challenge on the target. Adds bounded CORS and HTTP-method checks without submitting forms or sending exploit payloads.</p>
@@ -856,7 +947,7 @@ export default function Home() {
               <div className="verification-card">
                 <div className="verification-head">
                   <div><span className="scan-label">DOMAIN VERIFICATION</span><strong>Prove control before active checks</strong></div>
-                  <button className="ghost" onClick={generateSiteToken}>{siteToken ? "New token" : "Generate token"}</button>
+                  <button type="button" className="ghost" onClick={generateSiteToken}>{siteToken ? "Generate new token" : "Generate token"}</button>
                 </div>
                 {siteToken ? (
                   <>
@@ -913,12 +1004,12 @@ export default function Home() {
         <section className="panel work-panel standalone">
           <div className="panel-head">
             <div><span className="step">01</span><h2>Focused task</h2></div>
-            <select className="model-select" value={model} onChange={(e) => setModel(e.target.value)} disabled={!connected}>
+            <select className="model-select" aria-label="Cyberouter model" value={model} onChange={(e) => setModel(e.target.value)} disabled={!connected}>
               {!connected && <option>Connect first</option>}
               {models.map((item) => <option value={item} key={item}>{item}</option>)}
             </select>
           </div>
-          <div className="mode-tabs">{Object.entries(MODES).map(([id, item]) => <button key={id} className={mode === id ? "active" : ""} onClick={() => setMode(id)}>{item.label}</button>)}</div>
+          <div className="mode-tabs" aria-label="Choose analysis task">{Object.entries(MODES).map(([id, item]) => <button type="button" key={id} aria-pressed={mode === id} className={mode === id ? "active" : ""} onClick={() => setMode(id)}>{item.label}</button>)}</div>
           <div className="task-title"><h3>{currentMode.title}</h3><p>{currentMode.helper}</p></div>
           {mode === "review" && <label className="field"><span>Context <em>optional</em></span><textarea className="short" value={context} placeholder="Architecture, framework, expected trust boundary, relevant user role…" onChange={(e) => setContext(e.target.value)} /></label>}
           <label className="field"><span>{mode === "triage" ? "Finding" : mode === "review" ? "Code or diff" : "Prompt"}</span><textarea value={prompt} placeholder={currentMode.placeholder} onChange={(e) => setPrompt(e.target.value)} /></label>
@@ -962,7 +1053,7 @@ export default function Home() {
           <section className="panel repo-main">
             <div className="panel-head">
               <div><span className="step">02</span><h2>Security scan</h2></div>
-              <select className="model-select" value={model} onChange={(e) => setModel(e.target.value)} disabled={!connected}>
+              <select className="model-select" aria-label="Cyberouter model" value={model} onChange={(e) => setModel(e.target.value)} disabled={!connected}>
                 {!connected && <option>Connect Cyberouter</option>}
                 {models.map((item) => <option value={item} key={item}>{item}</option>)}
               </select>
@@ -977,12 +1068,12 @@ export default function Home() {
             ) : (
               <>
                 <div className="scan-cards">
-                  <button className={`scan-card ${scanKind === "quick" ? "selected" : ""}`} onClick={() => setScanKind("quick")}>
+                <button type="button" aria-pressed={scanKind === "quick"} className={`scan-card ${scanKind === "quick" ? "selected" : ""}`} onClick={() => setScanKind("quick")}>
                     <span className="scan-label">QUICK SCAN</span>
                     <strong>Focused security pass</strong>
                     <p>Reviews up to 18 high-signal files. Good before deployment or after a small feature.</p>
                   </button>
-                  <button className={`scan-card ${scanKind === "deep" ? "selected" : ""}`} onClick={() => setScanKind("deep")}>
+                <button type="button" aria-pressed={scanKind === "deep"} className={`scan-card ${scanKind === "deep" ? "selected" : ""}`} onClick={() => setScanKind("deep")}>
                     <span className="scan-label">DEEP AUDIT</span>
                     <strong>Broader codebase review</strong>
                     <p>Reviews up to 48 security-ranked files in multiple model passes, then consolidates the findings.</p>
@@ -992,7 +1083,7 @@ export default function Home() {
                 <div className="scan-actions">
                   <ActionButton
                     busy={repoBusy}
-                    disabled={repoBusy || !connected}
+                    disabled={repoBusy || !connected || (customScope && (selectedPaths.length === 0 || selectedPaths.length > scanLimit))}
                     idleLabel={scanKind === "deep" ? "Start deep audit" : "Start quick scan"}
                     busyLabel="Running security review…"
                     onClick={() => scanRepository(scanKind)}
@@ -1002,13 +1093,47 @@ export default function Home() {
 
                 <div className="pr-row">
                   <div><span className="scan-label">PULL REQUEST REVIEW</span><p>Review only the code changed by a PR for new security regressions.</p></div>
-                  <div className="pr-controls"><input type="number" min="1" value={prNumber} placeholder="PR #" onChange={(e) => setPrNumber(e.target.value)} /><button className="ghost" disabled={repoBusy || !connected} onClick={reviewPullRequest}>Review PR</button></div>
+                  <div className="pr-controls"><label className="sr-only" htmlFor="pull-request-number">Pull request number</label><input id="pull-request-number" type="number" min="1" value={prNumber} placeholder="PR #" onChange={(e) => setPrNumber(e.target.value)} /><button type="button" className="ghost" disabled={repoBusy || !connected} onClick={reviewPullRequest}>Review PR</button></div>
                 </div>
 
-                <div className="attack-map">
-                  <div className="section-caption">HIGH-SIGNAL FILES</div>
-                  <div className="file-list">{repoData.tree.candidates.slice(0, 16).map((file) => <div className="file-row" key={file.path}><span>{file.path}</span><b>{file.score}</b></div>)}</div>
-                </div>
+                <section className="scope-control" aria-labelledby="scope-title">
+                  <div className="scope-head">
+                    <div>
+                      <span className="section-caption">COVERAGE</span>
+                      <h3 id="scope-title">{customScope ? "Choose files to review" : "Recommended file scope"}</h3>
+                      <p>{customScope ? `Select up to ${scanLimit} files for this ${scanKind === "deep" ? "deep audit" : "quick scan"}.` : `${recommendedFiles.length} security-ranked files will be selected for this ${scanKind === "deep" ? "deep audit" : "quick scan"}.`}</p>
+                    </div>
+                    <button type="button" className="ghost" aria-expanded={customScope} onClick={() => { setCustomScope((value) => !value); setSelectedPaths([]); setFileFilter(""); }}>
+                      {customScope ? "Use recommended scope" : "Choose files"}
+                    </button>
+                  </div>
+                  {customScope ? (
+                    <div className="scope-editor">
+                      <label className="field scope-search"><span>Filter by path</span><input type="search" value={fileFilter} placeholder="Search routes, auth, database…" onChange={(event) => setFileFilter(event.target.value)} /></label>
+                      <div className="scope-count" id="scope-help"><strong>{selectedPaths.length} selected</strong><span>Maximum {scanLimit} for this scan · common credential patterns are redacted before model review</span></div>
+                      {selectedPaths.length > scanLimit && <p className="warning" role="status">Remove {selectedPaths.length - scanLimit} file{selectedPaths.length - scanLimit === 1 ? "" : "s"} or choose Deep Audit to continue.</p>}
+                      {selectedPaths.length > 0 && <div className="selected-paths" aria-label="Selected files">{selectedPaths.map((path) => <button type="button" key={path} className="selected-file-chip" aria-label={`Remove ${path} from selected files`} onClick={() => toggleFileScope(path)}><span>{path}</span><span aria-hidden="true">×</span></button>)}</div>}
+                      <div className="scope-file-list" role="group" aria-label="Reviewable source files" aria-describedby="scope-help">
+                        {visibleCandidates.length ? visibleCandidates.map((file) => {
+                          const checked = selectedPaths.includes(file.path);
+                          const atLimit = selectedPaths.length >= scanLimit && !checked;
+                          return <label className="scope-file" key={file.path}>
+                            <input type="checkbox" checked={checked} disabled={atLimit} onChange={() => toggleFileScope(file.path)} />
+                            <span className="scope-file-name">{file.path}</span>
+                            <span className="scope-score" aria-label={`security ranking ${file.score}`}>{file.score}</span>
+                          </label>;
+                        }) : <div className="scope-no-results">No paths match “{fileFilter}”. Try a shorter search.</div>}
+                      </div>
+                      {matchingCandidates.length > visibleCandidates.length && <p className="scope-footnote">Showing the first 80 of {matchingCandidates.length} matching ranked files. Refine the path search if needed.</p>}
+                    </div>
+                  ) : (
+                    <>
+                      <div className="scope-coverage-tags"><span>Authentication</span><span>API routes</span><span>Data access</span><span>Runtime & config</span></div>
+                      <div className="file-list scope-preview">{recommendedFiles.slice(0, 6).map((file) => <div className="file-row" key={file.path}><span>{file.path}</span><b>{file.score}</b></div>)}</div>
+                      {recommendedFiles.length > 6 && <p className="scope-footnote">Plus {recommendedFiles.length - 6} more ranked files in this scan.</p>}
+                    </>
+                  )}
+                </section>
               </>
             )}
           </section>
@@ -1022,15 +1147,14 @@ export default function Home() {
         </section>
       )}
 
-      {error && <div className="error-box global-error">{error}</div>}
-
-      <section className="panel output-panel">
+      <section className="panel output-panel" aria-labelledby="report-heading">
         <div className="panel-head">
-          <div><span className="step">{surface === "repositories" ? "04" : "03"}</span><h2>{reportTitle}</h2></div>
+          <div><span className="step">REPORT</span><h2 id="report-heading">{reportTitle}</h2></div>
           {usage && <div className="usage">{usage.prompt_tokens != null && <span>In {usage.prompt_tokens.toLocaleString()}</span>}{usage.completion_tokens != null && <span>Out {usage.completion_tokens.toLocaleString()}</span>}{usage.total_tokens != null && <span>Total {usage.total_tokens.toLocaleString()}</span>}</div>}
         </div>
         {result ? (
           <div className="report-wrap">
+            {resultNotice && <div className="report-context" role="note"><span className="report-context-mark" aria-hidden="true">i</span><div><strong>Scope and data handling</strong><p>{resultNotice}</p></div></div>}
             <div className="report-toolbar">
               <div className="report-badges">
                 {severityCounts.critical > 0 && <span className="risk-chip critical">{severityCounts.critical} critical</span>}
@@ -1040,24 +1164,24 @@ export default function Home() {
                 {resultSource === "repo" && latestScan && repoData && <span className="coverage-chip">{latestScan.files} of {repoData.tree.reviewableFiles} reviewable files</span>}
               </div>
               <div className="report-actions">
-                <button className="ghost" onClick={copyReport}>{copied ? "Copied" : "Copy report"}</button>
-                <button className="ghost" onClick={downloadReport}>Download .md</button>
+                <button type="button" className="ghost" onClick={copyReport}>{copiedReport ? "Report copied" : "Copy report"}</button>
+                <button type="button" className="ghost" onClick={downloadReport}>Download .md</button>
               </div>
             </div>
             {resultSource === "repo" && latestScan && repoData && latestScan.files < repoData.tree.reviewableFiles && (
               <div className="coverage-note">
                 <strong>Coverage note</strong>
-                <span>This was a focused {latestScan.kind} scan, not a full review of all {repoData.tree.reviewableFiles} mapped files. New scans spread coverage across auth, API, data, frontend, and configuration code instead of letting one folder dominate.</span>
+                <span>This focused {latestScan.kind} scan reviewed {latestScan.files} of {repoData.tree.reviewableFiles} mapped files. {latestScan.scope === "custom" ? "You chose the file paths; this report may omit important behavior in other parts of the repository." : "The automatic selection spreads attention across high-signal runtime, auth, API, data, frontend, and configuration paths."}</span>
               </div>
             )}
             <article className="markdown-report">
               <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ strong: StrongLabel }}>{result}</ReactMarkdown>
             </article>
           </div>
-        ) : <div className="empty"><div className="empty-mark">⌁</div><p>Your Cyberouter report will appear here.</p><span>Run a repository scan, PR review, or focused playground task.</span></div>}
+        ) : <div className="empty"><div className="empty-mark" aria-hidden="true">⌁</div><p>Your report will appear here.</p><span>Run a repository scan, PR review, website assessment, or focused model task.</span></div>}
       </section>
 
-      <footer><span>Cyberouter Lab</span><span>Read-only repository access · fixed upstream: router.enclave.ai/v1</span></footer>
+      <footer><span>Cyberouter Lab</span><span>Read-only GitHub access · model requests use router.enclave.ai/v1</span></footer>
     </main>
   );
 }
