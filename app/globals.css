@@ -80,6 +80,9 @@ input::placeholder, textarea::placeholder { color: #566068; }
 .model-select { width: auto; max-width: 48%; min-width: 170px; font-size: 11px; padding-right: 30px; }
 .model-cloud { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 20px; }
 .model-cloud span { border: 1px solid var(--line); border-radius: 999px; padding: 7px 9px; color: var(--soft); font: 10px/1 "SFMono-Regular", Consolas, monospace; }
+.codex-box { margin-top: 18px; border: 1px solid var(--line); border-radius: 14px; padding: 16px; background: #0b0e10; }
+.codex-box strong { display: block; margin-top: 9px; font-size: 14px; }
+.codex-box p { margin: 7px 0 13px; color: var(--muted); font-size: 11px; line-height: 1.55; }
 .mode-tabs { display: flex; gap: 4px; width: fit-content; padding: 4px; border: 1px solid var(--line); border-radius: 12px; background: #0a0c0e; }
 .task-title { margin: 22px 0 6px; }
 .task-title h3 { margin: 0; font-size: 20px; letter-spacing: -.03em; }
