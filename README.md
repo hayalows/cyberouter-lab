@@ -1,59 +1,69 @@
 # Cyberouter Lab
 
-A small Vercel-hosted workspace for Enclave Cyberouter. It gives you:
+A Vercel-hosted security workspace for Enclave Cyberouter.
 
-- a browser playground for the models available to your Cyberouter API key
-- defensive security-review and finding-triage modes
-- token usage returned by the upstream API when available
-- a live model catalogue from `GET https://router.enclave.ai/v1/models`
-- a remote Streamable HTTP MCP server at `/api/mcp`
+## Current capabilities
 
-## Security model
+- load the live Cyberouter model catalogue from your own key
+- focused Ask / Review code / Triage finding playground
+- read-only GitHub repository mapping
+- Quick Scan across up to 18 security-ranked source/config files
+- Deep Audit across up to 48 security-ranked files in multiple model passes
+- pull-request security review from a GitHub PR diff
+- simple local secret-pattern checks with values redacted before reporting
+- remote Streamable HTTP MCP endpoint at `/api/mcp`
 
-The repository contains **no Cyberouter API key**.
+## Security and credential handling
 
-The web UI stores the key in `sessionStorage` by default. If you explicitly enable “Remember on this device”, it uses `localStorage`. Each request sends the key to a same-origin Vercel function in the `x-cyberouter-key` header; the function forwards it to the fixed upstream `https://router.enclave.ai/v1` and does not persist it.
+No API keys or GitHub tokens are committed to this repository.
 
-The MCP endpoint uses the caller's `Authorization: Bearer <CYBEROUTER_API_KEY>` token directly as the Cyberouter credential. The server therefore does not need a second stored copy of the key.
+Cyberouter key:
+- sessionStorage by default
+- optional localStorage only when "Remember on this device" is enabled
+- forwarded by same-origin Vercel functions only to the fixed upstream `https://router.enclave.ai/v1`
 
-Do not add real API keys to source files, GitHub Actions logs, screenshots, or issues.
+GitHub token:
+- optional, needed only for private repositories
+- sessionStorage only
+- use a fine-grained token scoped to the specific repositories you want to scan
+- recommended permissions: Contents: Read and Pull requests: Read
 
-## Local development
+Repository access is read-only. The site does not commit, push, merge, deploy, or modify target repositories.
 
-```bash
-npm install
-npm run dev
-```
+## Repository scanning
 
-Open `http://localhost:3000`, paste a temporary Cyberouter key, and connect.
+The repository mapper first reads the GitHub tree and ranks source/config files using security-sensitive path signals such as authentication, authorization, API routes, database access, RLS, uploads, webhooks, secrets, infrastructure, and CI.
 
-## Deploy to Vercel
+A scan then fetches the selected files and sends them to the chosen Cyberouter model in bounded batches. A final model pass deduplicates and consolidates the report.
 
-Import this GitHub repository into Vercel and deploy it. No environment variables are required for the default setup.
-
-After deployment, open the production URL and enter your Cyberouter API key in the browser.
+This is a source review, not a live penetration test. Findings that depend on runtime behavior should be treated as hypotheses until tested in an authorized sandbox or staging environment.
 
 ## Remote MCP
 
-The MCP endpoint is:
+Production endpoint:
 
 ```text
-https://YOUR_DEPLOYMENT/api/mcp
+https://cyberouter-lab.vercel.app/api/mcp
 ```
 
-For Codex, keep the secret in an environment variable and configure the remote server:
+For Codex, store the Cyberouter key in an environment variable and configure:
 
 ```toml
 [mcp_servers.cyberouter]
-url = "https://YOUR_DEPLOYMENT/api/mcp"
+url = "https://cyberouter-lab.vercel.app/api/mcp"
 bearer_token_env_var = "CYBEROUTER_API_KEY"
 ```
 
-Available tools:
+Then verify with:
 
+```bash
+codex mcp list
+```
+
+MCP tools:
 - `cyberouter_list_models`
 - `cyberouter_security_review`
 - `cyberouter_triage_finding`
 - `cyberouter_ask`
 
-The model name is intentionally explicit. Cyberouter's public site says it can route automatically, but this project does not guess an undocumented auto-router model identifier. Use `cyberouter_list_models` to read the live IDs your key can access.
+MCP adds Cyberouter as a tool provider to Codex. It does not add third-party Cyberouter models to Codex's native OpenAI model picker.
