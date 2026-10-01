@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import WorkspaceTabs from "@/components/workspace-tabs";
+import ActionButton from "@/components/action-button";
+import WorkspaceOverview from "@/components/workspace-overview";
 
 const MODES = {
   ask: {
@@ -211,6 +214,15 @@ export default function Home() {
   const currentMode = MODES[mode];
   const severityCounts = useMemo(() => reportSeverityCounts(result), [result]);
   const latestScan = sessionHistory[0] || null;
+  const reportTitle = resultSource === "website"
+    ? "Website assessment"
+    : resultSource === "pr"
+      ? "Pull request review"
+      : resultSource === "repo"
+        ? "Repository security report"
+        : resultSource === "playground"
+          ? "Cyberouter response"
+          : "Security report";
 
   async function cyberApi(path, init = {}) {
     const response = await fetch(path, {
@@ -735,32 +747,37 @@ export default function Home() {
           <div className="mark">C</div>
           <div>
             <div className="brand-title">Cyberouter Lab</div>
-            <div className="brand-sub">Repository security lab + remote MCP</div>
+            <div className="brand-sub">Security workbench</div>
           </div>
         </div>
-        <div className={`status-pill ${connected ? "ok" : ""}`}><span className="status-dot" />{status}</div>
+        <div className="topbar-actions">
+          <button className="ghost compact-control" onClick={copyMcp}>{copied ? "Copied" : "Copy MCP"}</button>
+          <div className={`status-pill ${connected ? "ok" : ""}`} aria-live="polite"><span className="status-dot" />{status}</div>
+        </div>
       </header>
 
-      <section className="hero compact-hero">
-        <div>
+      <section className="workspace-intro">
+        <div className="workspace-intro-copy">
           <div className="eyebrow">CYBEROUTER SECURITY WORKSPACE</div>
-          <h1>Review a file, a pull request, or an entire codebase.</h1>
-          <p>Your Cyberouter key stays in this browser. Repository access is read-only. Public repos need no GitHub token; private repos can use a fine-grained read-only token for the current browser session.</p>
+          <h1>Inspect code. Test the live surface. Verify what matters.</h1>
+          <p>Move between repository review, bounded website testing, and focused model analysis without losing your current context.</p>
         </div>
-        <div className="mcp-card">
+        <div className="workspace-intro-note">
           <span className="card-kicker">REMOTE MCP</span>
           <strong>/api/mcp</strong>
-          <p>Connect Codex and let it call Cyberouter as a specialist while Codex keeps your repo context.</p>
-          <button className="ghost" onClick={copyMcp}>{copied ? "Copied" : "Copy MCP URL"}</button>
+          <p>Use Cyberouter as a security specialist from Codex while Codex keeps the working repository context.</p>
         </div>
       </section>
 
-      <nav className="surface-tabs">
-        <button className={surface === "repositories" ? "active" : ""} onClick={() => setSurface("repositories")}>Repositories</button>
-        <button className={surface === "website" ? "active" : ""} onClick={() => setSurface("website")}>Website</button>
-        <button className={surface === "playground" ? "active" : ""} onClick={() => setSurface("playground")}>Playground</button>
-        <button className={surface === "connection" ? "active" : ""} onClick={() => setSurface("connection")}>Connection</button>
-      </nav>
+      <WorkspaceOverview
+        connected={connected}
+        model={model}
+        repoName={repoData?.repository?.fullName || ""}
+        siteTarget={siteTarget}
+        onNavigate={setSurface}
+      />
+
+      <WorkspaceTabs value={surface} onChange={setSurface} />
 
       {surface === "connection" && (
         <section className="grid connection-grid">
@@ -768,7 +785,13 @@ export default function Home() {
             <div className="panel-head"><div><span className="step">01</span><h2>Cyberouter</h2></div>{connected && <button className="text-button" onClick={disconnect}>Disconnect</button>}</div>
             <label className="field"><span>Cyberouter API key</span><input type="password" autoComplete="off" spellCheck="false" value={apiKey} placeholder="Paste your key" onChange={(e) => setApiKey(e.target.value)} /></label>
             <label className="check-row"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /><span>Remember on this device<small>Off keeps it only until this browser session ends.</small></span></label>
-            <button className="primary" disabled={busy || !apiKey.trim()} onClick={connect}>{busy && !connected ? "Checking…" : connected ? "Refresh models" : "Connect & load models"}</button>
+            <ActionButton
+              busy={busy && !connected}
+              disabled={busy || !apiKey.trim()}
+              idleLabel={connected ? "Refresh models" : "Connect & load models"}
+              busyLabel="Checking key…"
+              onClick={connect}
+            />
             <div className="privacy-note"><span>Key handling</span><p>No database. The key is forwarded only to the fixed Cyberouter API when you make a request.</p></div>
           </aside>
 
@@ -858,10 +881,14 @@ export default function Home() {
             </div>
 
             <div className="scan-actions">
-              <button className="primary" disabled={siteBusy || !connected || !siteTarget.trim()} onClick={auditWebsite}>
-                {siteBusy ? "Testing…" : siteMode === "active" ? "Run verified assessment" : "Run passive assessment"}
-              </button>
-              <div className="progress-copy">{siteProgress || (connected ? "Ready to assess" : "Connect Cyberouter first")}</div>
+              <ActionButton
+                busy={siteBusy}
+                disabled={siteBusy || !connected || !siteTarget.trim()}
+                idleLabel={siteMode === "active" ? "Run verified assessment" : "Run passive assessment"}
+                busyLabel={siteMode === "active" ? "Running verified checks…" : "Mapping website…"}
+                onClick={auditWebsite}
+              />
+              <div className="progress-copy" aria-live="polite">{siteProgress || (connected ? "Ready to assess" : "Connect Cyberouter first")}</div>
             </div>
 
             {siteScan && (
@@ -896,7 +923,10 @@ export default function Home() {
           {mode === "review" && <label className="field"><span>Context <em>optional</em></span><textarea className="short" value={context} placeholder="Architecture, framework, expected trust boundary, relevant user role…" onChange={(e) => setContext(e.target.value)} /></label>}
           <label className="field"><span>{mode === "triage" ? "Finding" : mode === "review" ? "Code or diff" : "Prompt"}</span><textarea value={prompt} placeholder={currentMode.placeholder} onChange={(e) => setPrompt(e.target.value)} /></label>
           {mode === "triage" && <label className="field"><span>Evidence</span><textarea value={evidence} placeholder="Paste code, request/response traces, logs, scanner output, or the relevant diff…" onChange={(e) => setEvidence(e.target.value)} /></label>}
-          <div className="run-row"><label className="token-field"><span>Max output tokens</span><input type="number" min="64" max="8192" step="64" value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} /></label><button className="primary run" disabled={busy || !connected} onClick={run}>{busy && connected ? "Running…" : "Run with Cyberouter"}</button></div>
+          <div className="run-row">
+            <label className="token-field"><span>Max output tokens</span><input type="number" min="64" max="8192" step="64" value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} /></label>
+            <ActionButton className="run" busy={busy && connected} disabled={busy || !connected} idleLabel="Run with Cyberouter" busyLabel="Running analysis…" onClick={run} />
+          </div>
         </section>
       )}
 
@@ -906,7 +936,13 @@ export default function Home() {
             <div className="panel-head"><div><span className="step">01</span><h2>Repository</h2></div></div>
             <label className="field"><span>GitHub repository</span><input value={repoInput} placeholder="owner/repo or GitHub URL" onChange={(e) => setRepoInput(e.target.value)} /></label>
             <label className="field"><span>Branch / ref <em>optional</em></span><input value={repoRef} placeholder="Uses default branch" onChange={(e) => setRepoRef(e.target.value)} /></label>
-            <button className="primary" disabled={repoBusy || !repoInput.trim()} onClick={loadRepository}>{repoBusy && !repoData ? "Reading…" : "Load repository"}</button>
+            <ActionButton
+              busy={repoBusy && !repoData}
+              disabled={repoBusy || !repoInput.trim()}
+              idleLabel="Load repository"
+              busyLabel="Reading repository…"
+              onClick={loadRepository}
+            />
 
             {repoData && (
               <div className="repo-summary">
@@ -954,8 +990,14 @@ export default function Home() {
                 </div>
 
                 <div className="scan-actions">
-                  <button className="primary" disabled={repoBusy || !connected} onClick={() => scanRepository(scanKind)}>{repoBusy ? "Working…" : scanKind === "deep" ? "Start deep audit" : "Start quick scan"}</button>
-                  <div className="progress-copy">{repoProgress || (connected ? "Ready to scan" : "Connect Cyberouter first")}</div>
+                  <ActionButton
+                    busy={repoBusy}
+                    disabled={repoBusy || !connected}
+                    idleLabel={scanKind === "deep" ? "Start deep audit" : "Start quick scan"}
+                    busyLabel="Running security review…"
+                    onClick={() => scanRepository(scanKind)}
+                  />
+                  <div className="progress-copy" aria-live="polite">{repoProgress || (connected ? "Ready to scan" : "Connect Cyberouter first")}</div>
                 </div>
 
                 <div className="pr-row">
@@ -984,7 +1026,7 @@ export default function Home() {
 
       <section className="panel output-panel">
         <div className="panel-head">
-          <div><span className="step">{surface === "repositories" ? "04" : "03"}</span><h2>Security report</h2></div>
+          <div><span className="step">{surface === "repositories" ? "04" : "03"}</span><h2>{reportTitle}</h2></div>
           {usage && <div className="usage">{usage.prompt_tokens != null && <span>In {usage.prompt_tokens.toLocaleString()}</span>}{usage.completion_tokens != null && <span>Out {usage.completion_tokens.toLocaleString()}</span>}{usage.total_tokens != null && <span>Total {usage.total_tokens.toLocaleString()}</span>}</div>}
         </div>
         {result ? (

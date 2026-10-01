@@ -103,3 +103,16 @@ MCP tools:
 - `cyberouter_passive_web_audit`
 
 MCP adds Cyberouter as a tool provider to Codex. It does not add third-party Cyberouter models to Codex's native OpenAI model picker.
+
+
+## Interface design
+
+The workspace UI follows the Product Design OS in `hayalows/Skills`: task hierarchy comes before decoration, system status stays visible, advanced security modes use progressive disclosure, feedback is placed next to the action that triggered it, and responsive/accessibility states are treated as part of the component.
+
+Interaction references from useLayouts were adapted rather than dropped in unchanged:
+- Discrete Tabs → the animated workspace switcher
+- Status Button → scan/connect loading feedback that changes in place
+- Bento Card → the compact workspace-status overview
+- Dynamic Toolbar → sticky contextual navigation and report controls
+
+Motion is used for feedback and orientation, with a reduced-motion fallback.
