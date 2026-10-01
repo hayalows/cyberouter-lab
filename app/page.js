@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 const MODES = {
   ask: {
@@ -37,12 +39,72 @@ function extractText(payload) {
   return payload?.choices?.[0]?.message?.content || payload?.output_text || payload?.response || "";
 }
 
+function reportSeverityCounts(markdown = "") {
+  const counts = { critical: 0, high: 0, medium: 0, low: 0 };
+  for (const match of markdown.matchAll(/Severity:\s*\*{0,2}(Critical|High|Medium|Low)/gi)) {
+    counts[match[1].toLowerCase()] += 1;
+  }
+  return counts;
+}
+
+function StrongLabel({ children }) {
+  const text = Array.isArray(children) ? children.join("") : String(children ?? "");
+  const lower = text.toLowerCase();
+  let className = "";
+  if (lower.includes("severity: critical")) className = "severity severity-critical";
+  else if (lower.includes("severity: high")) className = "severity severity-high";
+  else if (lower.includes("severity: medium")) className = "severity severity-medium";
+  else if (lower.includes("severity: low")) className = "severity severity-low";
+  else if (lower.includes("confidence:")) className = "confidence-label";
+  return <strong className={className}>{children}</strong>;
+}
+
 function parseRepoInput(value) {
   const cleaned = String(value || "").trim().replace(/\.git$/i, "")
     .replace(/^https?:\/\/github\.com\//i, "").replace(/^github\.com\//i, "");
   const parts = cleaned.split("/").filter(Boolean);
   if (parts.length < 2) return null;
   return { owner: parts[0], repo: parts[1] };
+}
+
+function selectAuditFiles(candidates, limit) {
+  const buckets = { auth: [], api: [], data: [], frontend: [], config: [], general: [] };
+
+  for (const item of candidates) {
+    const path = item.path.toLowerCase();
+    if (/auth|login|session|oauth|password|recovery|invite|permission|role/.test(path)) buckets.auth.push(item);
+    else if (/\/api\/|route\.(js|ts|tsx)$|server|controller|webhook|rpc/.test(path)) buckets.api.push(item);
+    else if (/supabase|migration|database|\/db\/|\.sql$|rls|policy|neon/.test(path)) buckets.data.push(item);
+    else if (/components|pages|\/app\/|\/src\/|hooks|ui|view|screen/.test(path)) buckets.frontend.push(item);
+    else if (/package\.json|requirements|pyproject|cargo\.toml|go\.mod|vercel|next\.config|docker|\.github\/workflows|\.env/.test(path)) buckets.config.push(item);
+    else buckets.general.push(item);
+  }
+
+  const quotas = limit <= 18
+    ? { auth: 4, api: 3, data: 4, frontend: 3, config: 2, general: 2 }
+    : { auth: 9, api: 8, data: 12, frontend: 8, config: 5, general: 6 };
+
+  const selected = [];
+  const seen = new Set();
+
+  for (const [bucket, quota] of Object.entries(quotas)) {
+    for (const item of buckets[bucket].slice(0, quota)) {
+      if (!seen.has(item.path)) {
+        seen.add(item.path);
+        selected.push(item);
+      }
+    }
+  }
+
+  for (const item of candidates) {
+    if (selected.length >= limit) break;
+    if (!seen.has(item.path)) {
+      seen.add(item.path);
+      selected.push(item);
+    }
+  }
+
+  return selected.slice(0, limit);
 }
 
 function batchFiles(files, budget = 32000) {
@@ -131,6 +193,8 @@ export default function Home() {
   }, []);
 
   const currentMode = MODES[mode];
+  const severityCounts = useMemo(() => reportSeverityCounts(result), [result]);
+  const latestScan = sessionHistory[0] || null;
 
   async function cyberApi(path, init = {}) {
     const response = await fetch(path, {
@@ -318,7 +382,8 @@ export default function Home() {
     try {
       const candidates = repoData.tree.candidates || [];
       const limit = kind === "deep" ? 48 : 18;
-      const chosen = candidates.slice(0, limit).map((item) => item.path);
+      const selected = selectAuditFiles(candidates, limit);
+      const chosen = selected.map((item) => item.path);
       setRepoProgress(`Preparing ${kind === "deep" ? "deep audit" : "quick scan"} · ${chosen.length} files`);
       const files = await getFiles(chosen);
       const readable = files.filter((file) => file.content);
@@ -354,7 +419,7 @@ export default function Home() {
       const synthesis = await modelCall([
         {
           role: "system",
-          content: "You are the lead defensive security reviewer. Consolidate multiple code-review passes into one practical report. Deduplicate findings. Do not upgrade hypotheses into confirmed vulnerabilities. Rank findings by severity within the report, but preserve confidence separately. Include: executive summary, attack surface, confirmed/high-confidence findings, hypotheses needing runtime verification, local secret-scan signals, remediation order, and a retest checklist. Cite file paths throughout.",
+          content: "You are the lead defensive security reviewer. Consolidate multiple code-review passes into one practical report. Deduplicate findings. Do not upgrade hypotheses into confirmed vulnerabilities. Rank findings by severity within the report, but preserve confidence separately. Include: executive summary, attack surface, confirmed/high-confidence findings, hypotheses needing runtime verification, local secret-scan signals, remediation order, and a retest checklist. Cite file paths throughout. Return clean GitHub-flavored Markdown only. Do not wrap the full report in a code fence. Keep tables compact and prefer short paragraphs and bullets.",
         },
         {
           role: "user",
@@ -421,7 +486,7 @@ export default function Home() {
       if (outputs.length > 1) {
         setRepoProgress(`Consolidating PR #${number} review…`);
         const synthesis = await modelCall([
-          { role: "system", content: "Consolidate these authorized PR security review notes. Deduplicate findings, keep exact file references, preserve confidence, and finish with a short merge-safety checklist. Do not invent evidence." },
+          { role: "system", content: "Consolidate these authorized PR security review notes. Deduplicate findings, keep exact file references, preserve confidence, and finish with a short merge-safety checklist. Do not invent evidence. Return clean GitHub-flavored Markdown only and do not wrap the whole response in a code fence." },
           { role: "user", content: outputs.join("\n\n").slice(0, 52000) },
         ], 3200);
         final = synthesis.text || final;
@@ -444,6 +509,28 @@ export default function Home() {
     } finally {
       setRepoBusy(false);
     }
+  }
+
+  async function copyReport() {
+    if (!result) return;
+    await navigator.clipboard.writeText(result);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1400);
+  }
+
+  function downloadReport() {
+    if (!result) return;
+    const repoName = repoData?.repository?.name || "cyberouter";
+    const kind = latestScan?.kind ? String(latestScan.kind).replace(/\s+/g, "-") : "report";
+    const blob = new Blob([result], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${repoName}-${kind}-security-report.md`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
   }
 
   async function copyMcp() {
@@ -622,7 +709,32 @@ export default function Home() {
           <div><span className="step">{surface === "repositories" ? "04" : "03"}</span><h2>Security report</h2></div>
           {usage && <div className="usage">{usage.prompt_tokens != null && <span>In {usage.prompt_tokens.toLocaleString()}</span>}{usage.completion_tokens != null && <span>Out {usage.completion_tokens.toLocaleString()}</span>}{usage.total_tokens != null && <span>Total {usage.total_tokens.toLocaleString()}</span>}</div>}
         </div>
-        {result ? <pre className="result">{result}</pre> : <div className="empty"><div className="empty-mark">⌁</div><p>Your Cyberouter report will appear here.</p><span>Run a repository scan, PR review, or focused playground task.</span></div>}
+        {result ? (
+          <div className="report-wrap">
+            <div className="report-toolbar">
+              <div className="report-badges">
+                {severityCounts.critical > 0 && <span className="risk-chip critical">{severityCounts.critical} critical</span>}
+                {severityCounts.high > 0 && <span className="risk-chip high">{severityCounts.high} high</span>}
+                {severityCounts.medium > 0 && <span className="risk-chip medium">{severityCounts.medium} medium</span>}
+                {severityCounts.low > 0 && <span className="risk-chip low">{severityCounts.low} low</span>}
+                {latestScan && repoData && <span className="coverage-chip">{latestScan.files} of {repoData.tree.reviewableFiles} reviewable files</span>}
+              </div>
+              <div className="report-actions">
+                <button className="ghost" onClick={copyReport}>{copied ? "Copied" : "Copy report"}</button>
+                <button className="ghost" onClick={downloadReport}>Download .md</button>
+              </div>
+            </div>
+            {latestScan && repoData && latestScan.files < repoData.tree.reviewableFiles && (
+              <div className="coverage-note">
+                <strong>Coverage note</strong>
+                <span>This was a focused {latestScan.kind} scan, not a full review of all {repoData.tree.reviewableFiles} mapped files. New scans spread coverage across auth, API, data, frontend, and configuration code instead of letting one folder dominate.</span>
+              </div>
+            )}
+            <article className="markdown-report">
+              <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ strong: StrongLabel }}>{result}</ReactMarkdown>
+            </article>
+          </div>
+        ) : <div className="empty"><div className="empty-mark">⌁</div><p>Your Cyberouter report will appear here.</p><span>Run a repository scan, PR review, or focused playground task.</span></div>}
       </section>
 
       <footer><span>Cyberouter Lab</span><span>Read-only repository access · fixed upstream: router.enclave.ai/v1</span></footer>

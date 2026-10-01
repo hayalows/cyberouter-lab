@@ -58,7 +58,7 @@ export async function GET(request) {
       truncated: Boolean(tree.data.truncated),
       reviewableFiles: candidates.length,
       directories: directories.size,
-      candidates: candidates.slice(0, 160),
+      candidates: candidates.slice(0, 320),
     },
     auth: { usingToken: Boolean(token) },
     rate: tree.rate,

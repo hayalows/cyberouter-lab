@@ -137,7 +137,50 @@ input::placeholder, textarea::placeholder { color: #566068; }
 .output-panel { margin-top: 16px; min-height: 360px; }
 .usage { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .usage span { border: 1px solid var(--line); color: var(--muted); border-radius: 999px; padding: 6px 8px; font-size: 10px; font-family: "SFMono-Regular", Consolas, monospace; }
-.result { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 "SFMono-Regular", Consolas, monospace; color: #d9dee1; background: #0a0d0f; border: 1px solid var(--line-soft); border-radius: 14px; padding: 18px; min-height: 260px; }
+.report-wrap { min-width: 0; }
+.report-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.report-badges, .report-actions { display: flex; flex-wrap: wrap; gap: 7px; align-items: center; }
+.risk-chip, .coverage-chip { border-radius: 999px; padding: 6px 9px; font: 700 10px/1 "SFMono-Regular", Consolas, monospace; text-transform: uppercase; letter-spacing: .03em; }
+.risk-chip.critical { color: #ffd0d0; border: 1px solid rgba(255,83,83,.36); background: rgba(255,83,83,.1); }
+.risk-chip.high { color: #ffd8b0; border: 1px solid rgba(255,145,71,.34); background: rgba(255,145,71,.09); }
+.risk-chip.medium { color: #ffe3a5; border: 1px solid rgba(255,200,80,.3); background: rgba(255,200,80,.08); }
+.risk-chip.low { color: #c9dae5; border: 1px solid rgba(137,174,198,.25); background: rgba(137,174,198,.07); }
+.coverage-chip { color: var(--muted); border: 1px solid var(--line); background: #0b0e10; text-transform: none; font-weight: 600; }
+.coverage-note { display: flex; gap: 10px; align-items: flex-start; margin-bottom: 14px; padding: 12px 14px; border: 1px solid rgba(255,200,80,.22); border-radius: 12px; background: rgba(255,200,80,.055); }
+.coverage-note strong { flex: 0 0 auto; color: #e6ca8b; font-size: 11px; }
+.coverage-note span { color: #b9aa87; font-size: 11px; line-height: 1.55; }
+.markdown-report { color: #d9dee1; background: #0a0d0f; border: 1px solid var(--line-soft); border-radius: 14px; padding: clamp(18px, 3vw, 34px); min-height: 260px; font-size: 13px; line-height: 1.72; overflow-wrap: anywhere; }
+.markdown-report > :first-child { margin-top: 0; }
+.markdown-report > :last-child { margin-bottom: 0; }
+.markdown-report h1, .markdown-report h2, .markdown-report h3, .markdown-report h4 { color: var(--text); letter-spacing: -.025em; line-height: 1.2; }
+.markdown-report h1 { font-size: clamp(24px, 3vw, 34px); margin: 0 0 10px; }
+.markdown-report h2 { font-size: 19px; margin: 34px 0 12px; padding-top: 24px; border-top: 1px solid var(--line-soft); }
+.markdown-report h3 { font-size: 15px; margin: 24px 0 9px; }
+.markdown-report h4 { font-size: 13px; margin: 20px 0 8px; }
+.markdown-report p { margin: 9px 0; color: #cbd1d5; }
+.markdown-report ul, .markdown-report ol { margin: 10px 0 14px; padding-left: 22px; }
+.markdown-report li { margin: 5px 0; }
+.markdown-report hr { border: 0; border-top: 1px solid var(--line-soft); margin: 28px 0; }
+.markdown-report code { padding: 2px 5px; border: 1px solid var(--line-soft); border-radius: 6px; background: #12171a; color: #d8e2e8; font-size: .9em; }
+.markdown-report pre { overflow-x: auto; padding: 14px; border: 1px solid var(--line); border-radius: 12px; background: #07090b; }
+.markdown-report pre code { padding: 0; border: 0; background: transparent; }
+.markdown-report blockquote { margin: 14px 0; padding: 2px 0 2px 14px; border-left: 2px solid var(--accent); color: var(--muted); }
+.markdown-report table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 14px 0 22px; display: block; overflow-x: auto; font-size: 11px; }
+.markdown-report th, .markdown-report td { padding: 10px 11px; border-right: 1px solid var(--line-soft); border-bottom: 1px solid var(--line-soft); vertical-align: top; min-width: 120px; }
+.markdown-report th { color: var(--text); background: #121619; font-weight: 720; text-align: left; }
+.markdown-report td { color: #bdc5ca; background: #0c0f11; }
+.markdown-report tr:first-child th { border-top: 1px solid var(--line-soft); }
+.markdown-report th:first-child, .markdown-report td:first-child { border-left: 1px solid var(--line-soft); }
+.markdown-report tr:first-child th:first-child { border-top-left-radius: 10px; }
+.markdown-report tr:first-child th:last-child { border-top-right-radius: 10px; }
+.markdown-report a { color: var(--accent); text-underline-offset: 3px; }
+.markdown-report input[type="checkbox"] { width: 14px; min-height: 0; height: 14px; margin: 0 7px 0 0; accent-color: var(--accent); }
+.severity { display: inline-flex; align-items: center; border-radius: 999px; padding: 4px 7px; font-size: 10px; line-height: 1; letter-spacing: .02em; }
+.severity-critical { color: #ffd0d0; background: rgba(255,83,83,.12); border: 1px solid rgba(255,83,83,.3); }
+.severity-high { color: #ffd8b0; background: rgba(255,145,71,.1); border: 1px solid rgba(255,145,71,.28); }
+.severity-medium { color: #ffe3a5; background: rgba(255,200,80,.09); border: 1px solid rgba(255,200,80,.26); }
+.severity-low { color: #c9dae5; background: rgba(137,174,198,.08); border: 1px solid rgba(137,174,198,.22); }
+.confidence-label { color: #b7c8d1; }
 .empty { min-height: 255px; display: grid; place-items: center; align-content: center; text-align: center; color: var(--muted); }
 .empty-mark { color: var(--accent); font-size: 36px; line-height: 1; }
 .empty p { color: var(--soft); margin: 12px 0 4px; font-size: 13px; }
@@ -183,5 +226,10 @@ footer { display: flex; justify-content: space-between; gap: 20px; color: #59616
   .pr-controls input { width: 90px; }
   .history-list { grid-template-columns: 1fr; }
   .usage { justify-content: flex-start; }
+  .report-toolbar, .coverage-note { flex-direction: column; align-items: stretch; }
+  .report-actions { width: 100%; }
+  .report-actions .ghost { flex: 1; }
+  .markdown-report { padding: 16px; font-size: 12px; }
+  .markdown-report h2 { margin-top: 28px; padding-top: 20px; }
   footer { flex-direction: column; gap: 5px; }
 }
