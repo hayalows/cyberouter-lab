@@ -786,10 +786,10 @@ export default function Home() {
             <label className="field"><span>Cyberouter API key</span><input type="password" autoComplete="off" spellCheck="false" value={apiKey} placeholder="Paste your key" onChange={(e) => setApiKey(e.target.value)} /></label>
             <label className="check-row"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /><span>Remember on this device<small>Off keeps it only until this browser session ends.</small></span></label>
             <ActionButton
-              busy={busy && !connected}
+              busy={busy}
               disabled={busy || !apiKey.trim()}
               idleLabel={connected ? "Refresh models" : "Connect & load models"}
-              busyLabel="Checking key…"
+              busyLabel={connected ? "Refreshing models…" : "Checking key…"}
               onClick={connect}
             />
             <div className="privacy-note"><span>Key handling</span><p>No database. The key is forwarded only to the fixed Cyberouter API when you make a request.</p></div>
