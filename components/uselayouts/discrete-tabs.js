@@ -33,10 +33,8 @@ export default function UseLayoutsDiscreteTabs({ value, onChange, items = DEFAUL
             layout
             transition={reduceMotion ? { duration: 0 } : {
               layout: {
-                type: "spring",
-                damping: 20,
-                stiffness: 230,
-                mass: 1.2,
+                duration: 0.18,
+                ease: [0.22, 1, 0.36, 1],
               },
             }}
           >
@@ -49,9 +47,9 @@ export default function UseLayoutsDiscreteTabs({ value, onChange, items = DEFAUL
             {active && (
               <motion.span
                 className="ul-discrete-tab-label"
-                initial={reduceMotion ? false : { opacity: 0, filter: "blur(4px)" }}
+                initial={reduceMotion ? false : { opacity: 0, filter: "blur(2px)" }}
                 animate={{ opacity: 1, filter: "blur(0px)" }}
-                transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.86, 0, 0.07, 1] }}
+                transition={reduceMotion ? { duration: 0 } : { duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
               >
                 <strong>{item.label}</strong>
                 <small>{item.hint}</small>

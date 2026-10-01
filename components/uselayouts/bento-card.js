@@ -74,8 +74,8 @@ export default function UseLayoutsBentoCard({ connected, model, repoName, siteTa
                       <HugeiconsIcon icon={tab.icon} width={14} height={14} />
                       <span>{tab.label}</span>
                       {tab.badge && <small>{tab.badge}</small>}
-                      {selected && <motion.i layoutId="ul-bento-pill" transition={reduceMotion ? { duration: 0 } : { type: "spring", bounce: 0.2, duration: 0.6 }} />}
-                      {selected && <motion.b layoutId="ul-bento-bg" transition={reduceMotion ? { duration: 0 } : { type: "spring", bounce: 0.2, duration: 0.6 }} />}
+                      {selected && <motion.i layoutId="ul-bento-pill" transition={reduceMotion ? { duration: 0 } : { duration: 0.18, ease: [0.22, 1, 0.36, 1] }} />}
+                      {selected && <motion.b layoutId="ul-bento-bg" transition={reduceMotion ? { duration: 0 } : { duration: 0.18, ease: [0.22, 1, 0.36, 1] }} />}
                     </button>
                   );
                 })}
@@ -92,10 +92,10 @@ export default function UseLayoutsBentoCard({ connected, model, repoName, siteTa
                 <motion.div
                   key={active.id}
                   className="ul-bento-content-card"
-                  initial={reduceMotion ? false : { opacity: 0, y: 8, filter: "blur(4px)" }}
+                  initial={reduceMotion ? false : { opacity: 0, y: 4, filter: "blur(2px)" }}
                   animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                  exit={reduceMotion ? undefined : { opacity: 0, y: -8, filter: "blur(4px)" }}
-                  transition={reduceMotion ? { duration: 0 } : { duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+                  exit={reduceMotion ? undefined : { opacity: 0, y: -4, filter: "blur(2px)" }}
+                  transition={reduceMotion ? { duration: 0 } : { duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
                 >
                   <div>
                     <span>{metric.label}</span>

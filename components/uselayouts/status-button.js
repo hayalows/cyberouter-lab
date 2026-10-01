@@ -38,23 +38,20 @@ export default function UseLayoutsStatusButton({
         className={`ul-status-button ${state !== "idle" ? "working" : ""}`}
         disabled={disabled || busy}
         onClick={onClick}
-        whileTap={reduceMotion || disabled || busy ? undefined : { scale: 0.985 }}
+        whileTap={reduceMotion || disabled || busy ? undefined : { scale: 0.995 }}
         aria-busy={busy || undefined}
       >
         <span className="ul-status-text" aria-live="polite">
-          <AnimatePresence mode="popLayout" initial={false}>
-            {String(text || "").split("").map((char, index) => (
-              <motion.span
-                key={`${char}-${index}-${state}`}
-                layout
-                initial={reduceMotion ? false : { opacity: 0, scale: 0, filter: "blur(4px)" }}
-                animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
-                exit={reduceMotion ? undefined : { opacity: 0, scale: 0, filter: "blur(4px)" }}
-                transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 500, damping: 30, mass: 1 }}
-              >
-                {char === " " ? "\u00A0" : char}
-              </motion.span>
-            ))}
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={state}
+              initial={reduceMotion ? false : { opacity: 0, y: 3, filter: "blur(2px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -3, filter: "blur(2px)" }}
+              transition={reduceMotion ? { duration: 0 } : { duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {text}
+            </motion.span>
           </AnimatePresence>
         </span>
       </motion.button>
@@ -63,10 +60,10 @@ export default function UseLayoutsStatusButton({
         {state !== "idle" && (
           <motion.span
             className={`ul-status-indicator ${state}`}
-            initial={reduceMotion ? false : { opacity: 0, scale: 0, x: -8, filter: "blur(4px)" }}
+            initial={reduceMotion ? false : { opacity: 0, scale: 0, x: -8, filter: "blur(2px)" }}
             animate={{ opacity: 1, scale: 1, x: 0, filter: "blur(0px)" }}
-            exit={reduceMotion ? undefined : { opacity: 0, scale: 0, x: -8, filter: "blur(4px)" }}
-            transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 300, damping: 20 }}
+            exit={reduceMotion ? undefined : { opacity: 0, scale: 0, x: -8, filter: "blur(2px)" }}
+            transition={reduceMotion ? { duration: 0 } : { duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
             aria-hidden="true"
           >
             {state === "loading" ? (

@@ -60,7 +60,7 @@ export default function UseLayoutsSmoothDropdown({ onNavigate, onCopyMcp, active
           height: isOpen ? openHeight : 40,
           borderRadius: isOpen ? 14 : 12,
         }}
-        transition={reduceMotion ? { duration: 0 } : { type: "spring", damping: 34, stiffness: 380, mass: 0.8 }}
+        transition={reduceMotion ? { duration: 0 } : { duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
         className="ul-smooth-dropdown-shell"
       >
         <button
@@ -71,8 +71,8 @@ export default function UseLayoutsSmoothDropdown({ onNavigate, onCopyMcp, active
           onClick={() => setIsOpen((value) => !value)}
         >
           <motion.span
-            animate={{ opacity: isOpen ? 0 : 1, scale: isOpen ? 0.8 : 1 }}
-            transition={{ duration: reduceMotion ? 0 : 0.15 }}
+            animate={{ opacity: isOpen ? 0 : 1, scale: isOpen ? 0.94 : 1 }}
+            transition={{ duration: reduceMotion ? 0 : 0.14, ease: [0.22, 1, 0.36, 1] }}
           >
             <HugeiconsIcon icon={MoreHorizontalCircle01Icon} width={22} height={22} />
           </motion.span>
@@ -83,7 +83,7 @@ export default function UseLayoutsSmoothDropdown({ onNavigate, onCopyMcp, active
             className="ul-smooth-dropdown-content"
             initial={false}
             animate={{ opacity: isOpen ? 1 : 0 }}
-            transition={{ duration: reduceMotion ? 0 : 0.2, delay: isOpen && !reduceMotion ? 0.08 : 0 }}
+            transition={{ duration: reduceMotion ? 0 : 0.2, delay: isOpen && !reduceMotion ? 0.025 : 0 }}
             style={{ pointerEvents: isOpen ? "auto" : "none" }}
           >
             <ul>
@@ -96,7 +96,7 @@ export default function UseLayoutsSmoothDropdown({ onNavigate, onCopyMcp, active
                     key={item.id}
                     initial={reduceMotion ? false : { opacity: 0, x: 8 }}
                     animate={{ opacity: isOpen ? 1 : 0, x: isOpen ? 0 : 8 }}
-                    transition={{ delay: isOpen && !reduceMotion ? 0.06 + index * 0.02 : 0, duration: reduceMotion ? 0 : 0.15, ease: easeOutQuint }}
+                    transition={{ delay: isOpen && !reduceMotion ? 0.02 + index * 0.012 : 0, duration: reduceMotion ? 0 : 0.13, ease: easeOutQuint }}
                     onMouseEnter={() => setHoveredItem(item.id)}
                     onMouseLeave={() => setHoveredItem(null)}
                   >
@@ -108,8 +108,8 @@ export default function UseLayoutsSmoothDropdown({ onNavigate, onCopyMcp, active
                         setIsOpen(false);
                       }}
                     >
-                      {showIndicator && <motion.span layoutId="ul-dropdown-active" className="ul-smooth-dropdown-active" transition={{ type: "spring", damping: 30, stiffness: 520, mass: 0.8 }} />}
-                      {showIndicator && <motion.span layoutId="ul-dropdown-bar" className="ul-smooth-dropdown-bar" transition={{ type: "spring", damping: 30, stiffness: 520, mass: 0.8 }} />}
+                      {showIndicator && <motion.span layoutId="ul-dropdown-active" className="ul-smooth-dropdown-active" transition={reduceMotion ? { duration: 0 } : { duration: 0.14, ease: [0.22, 1, 0.36, 1] }} />}
+                      {showIndicator && <motion.span layoutId="ul-dropdown-bar" className="ul-smooth-dropdown-bar" transition={reduceMotion ? { duration: 0 } : { duration: 0.14, ease: [0.22, 1, 0.36, 1] }} />}
                       <HugeiconsIcon icon={item.icon} width={18} height={18} />
                       <span>{item.label}</span>
                     </button>

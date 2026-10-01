@@ -17,7 +17,7 @@ import {
 function Tool({ icon, label, onClick, danger = false, blurred = false }) {
   return (
     <button type="button" className={`ul-toolbar-tool ${danger ? "danger" : ""}`} title={label} aria-label={label} onClick={onClick}>
-      <motion.span animate={{ filter: blurred ? "blur(1px)" : "blur(0px)" }}>
+      <motion.span animate={{ opacity: blurred ? 0.72 : 1, filter: blurred ? "blur(.35px)" : "blur(0px)" }}>
         <HugeiconsIcon icon={icon} width={20} height={20} />
       </motion.span>
     </button>
@@ -36,13 +36,8 @@ export default function UseLayoutsDynamicToolbar({ onCopy, onDownload, onClear, 
   const hasMeasurements = primaryBounds.width > 0;
   const width = expanded ? secondaryBounds.width : primaryBounds.width;
   const transition = reduceMotion || !mounted ? { duration: 0 } : {
-    type: "spring",
-    stiffness: 200,
-    damping: 20,
-    mass: 0.8,
-    bounce: 0.9,
-    duration: expanded ? 0.4 : 1.2,
-    delay: expanded ? 0 : 0.015,
+    duration: 0.2,
+    ease: [0.22, 1, 0.36, 1],
   };
 
   return (
@@ -62,7 +57,7 @@ export default function UseLayoutsDynamicToolbar({ onCopy, onDownload, onClear, 
           <Tool icon={InboxIcon} label="Copy report" onClick={onCopy} blurred={expanded} />
           <Tool icon={Archive02Icon} label="Download report" onClick={onDownload} blurred={expanded} />
           <Tool icon={Message01Icon} label="Copy MCP endpoint" onClick={onCopyMcp} blurred={expanded} />
-          <motion.button type="button" className="ul-toolbar-next" whileTap={{ scale: 0.9 }} onClick={() => setExpanded(true)} aria-label="More report actions">
+          <motion.button type="button" className="ul-toolbar-next" whileTap={reduceMotion ? undefined : { scale: 0.97 }} onClick={() => setExpanded(true)} aria-label="More report actions">
             <HugeiconsIcon icon={ArrowRight01Icon} width={22} height={22} />
           </motion.button>
         </div>
@@ -75,7 +70,7 @@ export default function UseLayoutsDynamicToolbar({ onCopy, onDownload, onClear, 
             pointerEvents: expanded ? "auto" : "none",
           }}
         >
-          <motion.button type="button" className="ul-toolbar-next" whileTap={{ scale: 0.9 }} onClick={() => setExpanded(false)} aria-label="Back to primary report actions">
+          <motion.button type="button" className="ul-toolbar-next" whileTap={reduceMotion ? undefined : { scale: 0.97 }} onClick={() => setExpanded(false)} aria-label="Back to primary report actions">
             <HugeiconsIcon icon={ArrowLeft01Icon} width={22} height={22} />
           </motion.button>
           <Tool icon={ArrowReloadHorizontalIcon} label="Back to report actions" onClick={() => setExpanded(false)} blurred={!expanded} />
