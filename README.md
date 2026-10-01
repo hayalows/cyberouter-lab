@@ -122,3 +122,8 @@ Interaction references from useLayouts were adapted rather than dropped in uncha
 - Dynamic Toolbar → sticky contextual navigation and report controls
 
 Motion is used for feedback and orientation, with a reduced-motion fallback.
+
+
+## useLayouts components
+
+Five useLayouts components were incorporated into the production interface: Discrete Tabs, Dynamic Toolbar, Smooth Dropdown, Bento Card, and Save Button. The upstream source snapshots are preserved under `third_party/uselayouts/upstream/` with the original MIT license. Production adapters live under `components/uselayouts/` and keep the original interaction patterns while mapping them to Cyberouter Lab's existing state and dark security-workbench visual system.

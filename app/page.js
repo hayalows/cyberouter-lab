@@ -3,9 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import WorkspaceTabs from "@/components/workspace-tabs";
-import ActionButton from "@/components/action-button";
-import WorkspaceOverview from "@/components/workspace-overview";
+import UseLayoutsDiscreteTabs from "@/components/uselayouts/discrete-tabs";
+import UseLayoutsStatusButton from "@/components/uselayouts/status-button";
+import UseLayoutsBentoCard from "@/components/uselayouts/bento-card";
+import UseLayoutsSmoothDropdown from "@/components/uselayouts/smooth-dropdown";
+import UseLayoutsDynamicToolbar from "@/components/uselayouts/dynamic-toolbar";
 import { detectSensitiveSignals, redactSensitiveText } from "@/lib/sensitive-content";
 
 const MODES = {
@@ -812,6 +814,13 @@ export default function Home() {
     URL.revokeObjectURL(url);
   }
 
+  function clearReport() {
+    setResult("");
+    setResultNotice("");
+    setResultSource("none");
+    setUsage(null);
+  }
+
   async function copyMcp() {
     await navigator.clipboard.writeText(`${window.location.origin}/api/mcp`);
     setCopiedMcp(true);
@@ -836,7 +845,11 @@ export default function Home() {
           </div>
         </div>
         <div className="topbar-actions">
-          <button type="button" className="ghost compact-control" onClick={copyMcp}>{copiedMcp ? "MCP URL copied" : "MCP endpoint"}</button>
+          <UseLayoutsSmoothDropdown
+            activeSurface={surface}
+            onNavigate={setSurface}
+            onCopyMcp={copyMcp}
+          />
           <button type="button" className={`status-pill ${connected ? "ok" : ""}`} aria-live="polite" onClick={() => setSurface("connection")} aria-label={`${status}. Open connection settings`}>
             <span className="status-dot" />{status}<span className="status-action-hint">Manage</span>
           </button>
@@ -857,7 +870,7 @@ export default function Home() {
         </div>
       </section>
 
-      <WorkspaceOverview
+      <UseLayoutsBentoCard
         connected={connected}
         model={model}
         repoName={repoData?.repository?.fullName || ""}
@@ -865,7 +878,7 @@ export default function Home() {
         onNavigate={setSurface}
       />
 
-      <WorkspaceTabs value={surface} onChange={setSurface} />
+      <UseLayoutsDiscreteTabs value={surface} onChange={setSurface} />
 
       {error && <div className="error-box global-error" role="alert"><span>{error}</span><button type="button" className="error-dismiss" onClick={() => setError("")}>Dismiss</button></div>}
 
@@ -875,7 +888,7 @@ export default function Home() {
             <div className="panel-head"><div><span className="step">01</span><h2>Cyberouter</h2></div>{connected && <button className="text-button" onClick={disconnect}>Disconnect</button>}</div>
             <label className="field"><span>Cyberouter API key</span><input type="password" autoComplete="new-password" spellCheck="false" value={apiKey} placeholder="Paste your key" onChange={(e) => setApiKey(e.target.value)} /></label>
             <label className="check-row"><input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /><span>Remember on this device<small>Off keeps it only until this browser session ends.</small></span></label>
-            <ActionButton
+            <UseLayoutsStatusButton
               busy={busy}
               disabled={busy || !apiKey.trim()}
               idleLabel={connected ? "Refresh models" : "Connect & load models"}
@@ -972,7 +985,7 @@ export default function Home() {
             </div>
 
             <div className="scan-actions">
-              <ActionButton
+              <UseLayoutsStatusButton
                 busy={siteBusy}
                 disabled={siteBusy || !connected || !siteTarget.trim()}
                 idleLabel={siteMode === "active" ? "Run verified assessment" : "Run passive assessment"}
@@ -1016,7 +1029,7 @@ export default function Home() {
           {mode === "triage" && <label className="field"><span>Evidence</span><textarea value={evidence} placeholder="Paste code, request/response traces, logs, scanner output, or the relevant diff…" onChange={(e) => setEvidence(e.target.value)} /></label>}
           <div className="run-row">
             <label className="token-field"><span>Max output tokens</span><input type="number" min="64" max="8192" step="64" value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} /></label>
-            <ActionButton className="run" busy={busy && connected} disabled={busy || !connected} idleLabel="Run with Cyberouter" busyLabel="Running analysis…" onClick={run} />
+            <UseLayoutsStatusButton className="run" busy={busy && connected} disabled={busy || !connected} idleLabel="Run with Cyberouter" busyLabel="Running analysis…" onClick={run} />
           </div>
         </section>
       )}
@@ -1027,7 +1040,7 @@ export default function Home() {
             <div className="panel-head"><div><span className="step">01</span><h2>Repository</h2></div></div>
             <label className="field"><span>GitHub repository</span><input value={repoInput} placeholder="owner/repo or GitHub URL" onChange={(e) => setRepoInput(e.target.value)} /></label>
             <label className="field"><span>Branch / ref <em>optional</em></span><input value={repoRef} placeholder="Uses default branch" onChange={(e) => setRepoRef(e.target.value)} /></label>
-            <ActionButton
+            <UseLayoutsStatusButton
               busy={repoBusy && !repoData}
               disabled={repoBusy || !repoInput.trim()}
               idleLabel="Load repository"
@@ -1081,7 +1094,7 @@ export default function Home() {
                 </div>
 
                 <div className="scan-actions">
-                  <ActionButton
+                  <UseLayoutsStatusButton
                     busy={repoBusy}
                     disabled={repoBusy || !connected || (customScope && (selectedPaths.length === 0 || selectedPaths.length > scanLimit))}
                     idleLabel={scanKind === "deep" ? "Start deep audit" : "Start quick scan"}
@@ -1163,10 +1176,12 @@ export default function Home() {
                 {severityCounts.low > 0 && <span className="risk-chip low">{severityCounts.low} low</span>}
                 {resultSource === "repo" && latestScan && repoData && <span className="coverage-chip">{latestScan.files} of {repoData.tree.reviewableFiles} reviewable files</span>}
               </div>
-              <div className="report-actions">
-                <button type="button" className="ghost" onClick={copyReport}>{copiedReport ? "Report copied" : "Copy report"}</button>
-                <button type="button" className="ghost" onClick={downloadReport}>Download .md</button>
-              </div>
+              <UseLayoutsDynamicToolbar
+                onCopy={copyReport}
+                onDownload={downloadReport}
+                onClear={clearReport}
+                onCopyMcp={copyMcp}
+              />
             </div>
             {resultSource === "repo" && latestScan && repoData && latestScan.files < repoData.tree.reviewableFiles && (
               <div className="coverage-note">
