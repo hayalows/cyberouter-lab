@@ -452,6 +452,13 @@ export default function Home() {
     setTimeout(() => setCopied(false), 1400);
   }
 
+  async function copyCodexConfig() {
+    const config = `[mcp_servers.cyberouter]\nurl = "${window.location.origin}/api/mcp"\nbearer_token_env_var = "CYBEROUTER_API_KEY"`;
+    await navigator.clipboard.writeText(config);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1400);
+  }
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -500,6 +507,12 @@ export default function Home() {
             <label className="field"><span>Fine-grained GitHub token <em>optional</em></span><input type="password" autoComplete="off" value={githubToken} placeholder="Only needed for private repos" onChange={(e) => setGithubToken(e.target.value)} /></label>
             <div className="privacy-note"><span>Recommended permission</span><p>Use a fine-grained token scoped only to repositories you want to scan, with Contents: Read and Pull requests: Read. It is kept in sessionStorage only and is not committed or stored server-side.</p></div>
             {connected && <div className="model-cloud">{models.map((item) => <span key={item}>{item}</span>)}</div>}
+            <div className="codex-box">
+              <span className="scan-label">CODEX MCP</span>
+              <strong>Use Cyberouter beside Codex</strong>
+              <p>Codex keeps its OpenAI model as the main agent and can call these Cyberouter models through the MCP tools. They do not become entries in Codex's native model picker.</p>
+              <button className="ghost" onClick={copyCodexConfig}>{copied ? "Copied" : "Copy Codex config"}</button>
+            </div>
           </section>
         </section>
       )}
