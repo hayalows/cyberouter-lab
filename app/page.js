@@ -130,7 +130,9 @@ export default function Home() {
     setResult("");
     setUsage(null);
     sessionStorage.removeItem("cyberouter_key");
-    if (!remember) setApiKey("");
+    localStorage.removeItem("cyberouter_key");
+    setApiKey("");
+    setRemember(false);
   }
 
   const messages = useMemo(() => {
