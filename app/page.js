@@ -68,11 +68,13 @@ function parseRepoInput(value) {
 }
 
 function selectAuditFiles(candidates, limit) {
-  const buckets = { auth: [], api: [], data: [], frontend: [], config: [], general: [] };
+  const buckets = { runtime: [], auth: [], api: [], data: [], frontend: [], config: [], general: [] };
+  const migration = (item) => /\/migrations\//.test(item.path.toLowerCase());
 
   for (const item of candidates) {
     const path = item.path.toLowerCase();
-    if (/auth|login|session|oauth|password|recovery|invite|permission|role/.test(path)) buckets.auth.push(item);
+    if (/supabase\/functions|\/functions\/|worker\/|edge[_-]|src\/lib\/backend|server[_-]?action/.test(path)) buckets.runtime.push(item);
+    else if (/auth|login|session|oauth|password|recovery|invite|permission|role/.test(path)) buckets.auth.push(item);
     else if (/\/api\/|route\.(js|ts|tsx)$|server|controller|webhook|rpc/.test(path)) buckets.api.push(item);
     else if (/supabase|migration|database|\/db\/|\.sql$|rls|policy|neon/.test(path)) buckets.data.push(item);
     else if (/components|pages|\/app\/|\/src\/|hooks|ui|view|screen/.test(path)) buckets.frontend.push(item);
@@ -80,9 +82,13 @@ function selectAuditFiles(candidates, limit) {
     else buckets.general.push(item);
   }
 
+  for (const key of ["runtime", "auth", "api", "frontend", "config", "general"]) {
+    buckets[key].sort((a, b) => Number(migration(a)) - Number(migration(b)) || b.score - a.score);
+  }
+
   const quotas = limit <= 18
-    ? { auth: 4, api: 3, data: 4, frontend: 3, config: 2, general: 2 }
-    : { auth: 9, api: 8, data: 12, frontend: 8, config: 5, general: 6 };
+    ? { runtime: 3, auth: 3, api: 2, data: 4, frontend: 3, config: 2, general: 1 }
+    : { runtime: 7, auth: 7, api: 6, data: 12, frontend: 8, config: 5, general: 3 };
 
   const selected = [];
   const seen = new Set();
