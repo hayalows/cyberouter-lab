@@ -1,6 +1,7 @@
 import { createMcpHandler, withMcpAuth } from "mcp-handler";
 import { z } from "zod";
 import { buildChatBody, cyberouterFetch, errorMessage, validateKey } from "@/lib/cyberouter";
+import { auditPublicSite } from "@/lib/site-audit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -90,6 +91,28 @@ const handler = createMcpHandler((server) => {
       system: "You are a defensive security triage analyst. Test the claimed issue against the supplied evidence. Identify assumptions, attack preconditions, disconfirming evidence, confidence, likely impact, and the smallest safe remediation. Do not claim exploitability without evidence.",
       prompt: `Suspected finding:\n${finding}\n\nEvidence:\n${evidence}`,
     }),
+  );
+
+  server.registerTool(
+    "cyberouter_passive_web_audit",
+    {
+      title: "Passive website security audit",
+      description: "Perform a bounded, read-only security assessment of a public website using GET requests only, then ask a chosen Cyberouter model to interpret the evidence. Private/internal network targets, form submission, credential attacks, and exploit payloads are blocked.",
+      inputSchema: z.object({
+        model: z.string().min(1),
+        url: z.string().min(4).max(2000),
+        maxTokens: z.number().int().min(256).max(8192).optional(),
+      }),
+    },
+    async ({ model, url, maxTokens }, ctx) => {
+      const evidence = await auditPublicSite(url, { mode: "passive" });
+      return callChat(tokenFromContext(ctx), {
+        model,
+        maxTokens: maxTokens || 3200,
+        system: "You are a defensive web application security reviewer. Interpret only the supplied bounded passive scan evidence. Use OWASP WSTG and ASVS concepts as a taxonomy, not as a claim of compliance. Separate confirmed observations from risks that require authenticated or active testing. Return clean Markdown with severity, confidence, evidence, likely impact, remediation, and a short follow-up test plan. Do not invent endpoints or exploitability.",
+        prompt: `Target: ${evidence.target}\n\nPassive scan evidence:\n${JSON.stringify(evidence).slice(0, 85000)}`,
+      });
+    },
   );
 
   server.registerTool(

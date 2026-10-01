@@ -1,0 +1,91 @@
+name: Authorized ZAP Baseline
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: "HTTPS URL you own or are explicitly authorized to test"
+        required: true
+        type: string
+      verification_token:
+        description: "Token published at /.well-known/cyberouter-lab.txt"
+        required: true
+        type: string
+      authorization_confirmation:
+        description: 'Type exactly: I AM AUTHORIZED'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  verify-and-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TARGET_URL: ${{ inputs.target_url }}
+      VERIFICATION_TOKEN: ${{ inputs.verification_token }}
+      AUTH_CONFIRMATION: ${{ inputs.authorization_confirmation }}
+    steps:
+      - name: Validate authorization and public target
+        shell: bash
+        run: |
+          python - <<'PY'
+          import ipaddress
+          import os
+          import re
+          import socket
+          import sys
+          import urllib.parse
+          import urllib.request
+
+          target = os.environ["TARGET_URL"].strip()
+          token = os.environ["VERIFICATION_TOKEN"].strip()
+          confirmation = os.environ["AUTH_CONFIRMATION"].strip()
+
+          if confirmation != "I AM AUTHORIZED":
+              raise SystemExit("Authorization confirmation did not match.")
+          if not re.fullmatch(r"cyberouter-[A-Za-z0-9-]{16,120}", token):
+              raise SystemExit("Verification token format is invalid.")
+
+          parsed = urllib.parse.urlparse(target)
+          if parsed.scheme != "https" or not parsed.hostname:
+              raise SystemExit("The deep runner accepts HTTPS targets only.")
+          if parsed.username or parsed.password:
+              raise SystemExit("Credentials in the URL are not allowed.")
+          if parsed.port not in (None, 443):
+              raise SystemExit("Only standard HTTPS port 443 is allowed.")
+
+          host = parsed.hostname.rstrip(".").lower()
+          if host == "localhost" or host.endswith((".localhost", ".local", ".internal")):
+              raise SystemExit("Local or internal targets are blocked.")
+
+          addresses = {item[4][0] for item in socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)}
+          if not addresses:
+              raise SystemExit("Target did not resolve.")
+          for address in addresses:
+              ip = ipaddress.ip_address(address)
+              if not ip.is_global:
+                  raise SystemExit(f"Target resolves to non-public address: {address}")
+
+          verify_url = urllib.parse.urlunparse(("https", parsed.netloc, "/.well-known/cyberouter-lab.txt", "", "", ""))
+          request = urllib.request.Request(verify_url, headers={"User-Agent": "Cyberouter-Lab-Authorization-Check/1.0"})
+          with urllib.request.urlopen(request, timeout=10) as response:
+              body = response.read(4096).decode("utf-8", "replace").strip()
+              final = urllib.parse.urlparse(response.geturl())
+              if final.hostname and final.hostname.rstrip(".").lower().removeprefix("www.") != host.removeprefix("www."):
+                  raise SystemExit("Verification redirected outside the target hostname.")
+          if body != token:
+              raise SystemExit("Verification file does not contain the supplied token exactly.")
+
+          print(f"Authorization challenge verified for {host}.")
+          PY
+
+      - name: Run OWASP ZAP baseline
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: ${{ inputs.target_url }}
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-baseline-report

@@ -91,6 +91,23 @@ input::placeholder, textarea::placeholder { color: #566068; }
 .token-field { width: 160px; flex: 0 0 160px; }
 .run-row .run { flex: 1; width: auto; }
 .repo-layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 16px; align-items: start; }
+.site-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; align-items: start; }
+.site-target-panel, .site-main { padding: 22px; }
+.verification-card { margin-top: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 14px; background: #0b0e10; }
+.verification-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.verification-head strong { display: block; margin-top: 7px; font-size: 14px; }
+.verification-card p { color: var(--muted); font-size: 11px; line-height: 1.55; margin: 12px 0 7px; }
+.verification-code { display: block; overflow-x: auto; white-space: nowrap; border: 1px solid var(--line-soft); border-radius: 10px; background: #07090b; padding: 10px 11px; color: #dbe4e8; font-size: 10px; }
+.authorization-check { margin-bottom: 0; }
+.site-scope { display: flex; flex-wrap: wrap; gap: 7px; margin: 16px 0 0; }
+.site-scope span { border: 1px solid var(--line-soft); border-radius: 999px; padding: 7px 9px; color: var(--muted); font-size: 10px; background: #0b0e10; }
+.site-scope b { color: var(--soft); font-weight: 760; }
+.site-summary { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 18px; }
+.site-summary div { border: 1px solid var(--line-soft); border-radius: 12px; padding: 12px; background: #0b0e10; min-width: 0; }
+.site-summary strong { display: block; font-size: 19px; letter-spacing: -.03em; }
+.site-summary span { display: block; margin-top: 3px; color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .06em; }
+.method-note { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+.method-note p { margin: 7px 0 0; color: var(--muted); font-size: 11px; line-height: 1.6; }
 .repo-layout:has(.history-panel) { grid-template-columns: 260px minmax(0, 1fr) 220px; }
 .repo-summary { margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--line-soft); }
 .repo-name { font-size: 15px; font-weight: 720; letter-spacing: -.02em; overflow-wrap: anywhere; }
@@ -198,7 +215,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; color: #59616
   .status-pill { max-width: 48%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .hero { grid-template-columns: 1fr; padding: 42px 0 24px; gap: 20px; }
   h1 { font-size: clamp(38px, 11vw, 56px); }
-  .grid, .repo-layout, .repo-layout:has(.history-panel) { grid-template-columns: 1fr; }
+  .grid, .repo-layout, .repo-layout:has(.history-panel), .site-layout { grid-template-columns: 1fr; }
   .history-panel { grid-column: auto; }
   .history-list { grid-template-columns: 1fr 1fr; }
   .model-select { max-width: 52%; min-width: 135px; }
@@ -214,7 +231,7 @@ footer { display: flex; justify-content: space-between; gap: 20px; color: #59616
   .hero > div > p { font-size: 13px; }
   .surface-tabs { width: 100%; }
   .surface-tabs button { flex: 1; padding-inline: 6px; }
-  .key-panel, .work-panel, .output-panel, .repo-sidebar, .repo-main, .history-panel { padding: 16px; }
+  .key-panel, .work-panel, .output-panel, .repo-sidebar, .repo-main, .history-panel, .site-target-panel, .site-main { padding: 16px; }
   .work-panel .panel-head, .repo-main .panel-head { flex-direction: column; align-items: stretch; }
   .model-select { width: 100%; max-width: none; }
   .mode-tabs { width: 100%; }
@@ -222,6 +239,9 @@ footer { display: flex; justify-content: space-between; gap: 20px; color: #59616
   .run-row, .scan-actions, .pr-row { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
   .token-field { width: 100%; flex-basis: auto; }
   .scan-cards { grid-template-columns: 1fr; }
+  .verification-head { flex-direction: column; }
+  .verification-head .ghost { width: 100%; }
+  .site-summary { grid-template-columns: repeat(2, 1fr); }
   .pr-controls { min-width: 0; }
   .pr-controls input { width: 90px; }
   .history-list { grid-template-columns: 1fr; }

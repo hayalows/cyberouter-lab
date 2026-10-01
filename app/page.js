@@ -185,6 +185,16 @@ export default function Home() {
   const [scanKind, setScanKind] = useState("quick");
   const [prNumber, setPrNumber] = useState("");
   const [sessionHistory, setSessionHistory] = useState([]);
+  const [resultSource, setResultSource] = useState("none");
+
+  const [siteTarget, setSiteTarget] = useState("");
+  const [siteMode, setSiteMode] = useState("passive");
+  const [siteToken, setSiteToken] = useState("");
+  const [siteAuthorized, setSiteAuthorized] = useState(false);
+  const [siteScan, setSiteScan] = useState(null);
+  const [siteBusy, setSiteBusy] = useState(false);
+  const [siteProgress, setSiteProgress] = useState("");
+  const [correlateRepo, setCorrelateRepo] = useState(false);
 
   useEffect(() => {
     const persistent = localStorage.getItem("cyberouter_key");
@@ -311,6 +321,7 @@ export default function Home() {
       });
       setResult(extractText(data) || "Cyberouter returned a response, but no text message was found.");
       setUsage(data?.usage || null);
+      setResultSource("playground");
     } catch (err) {
       setError(err.message);
     } finally {
@@ -436,6 +447,7 @@ export default function Home() {
       const finalText = synthesis.text || findings.join("\n\n");
       setResult(finalText);
       setUsage(synthesis.usage);
+      setResultSource("repo");
       setSessionHistory((items) => [{
         id: Date.now(),
         kind,
@@ -499,6 +511,7 @@ export default function Home() {
         setUsage(synthesis.usage);
       }
       setResult(final || "No textual review was returned.");
+      setResultSource("pr");
       setRepoProgress(`Finished PR #${number} review`);
       setSessionHistory((items) => [{
         id: Date.now(),
@@ -514,6 +527,169 @@ export default function Home() {
       setError(err.message);
     } finally {
       setRepoBusy(false);
+    }
+  }
+
+  async function siteApi(path, init = {}) {
+    const response = await fetch(path, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        "x-cyberouter-key": apiKey.trim(),
+        ...(init.headers || {}),
+      },
+      cache: "no-store",
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data?.error || `Website audit failed with HTTP ${response.status}`);
+    return data;
+  }
+
+  function generateSiteToken() {
+    const random = typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : Math.random().toString(36).slice(2) + Date.now().toString(36);
+    setSiteToken(`cyberouter-${random}`);
+  }
+
+  function verificationUrl() {
+    try {
+      const value = /^[a-z][a-z0-9+.-]*:\/\//i.test(siteTarget.trim()) ? siteTarget.trim() : `https://${siteTarget.trim()}`;
+      return new URL("/.well-known/cyberouter-lab.txt", value).toString();
+    } catch {
+      return "/.well-known/cyberouter-lab.txt";
+    }
+  }
+
+  function localSiteMarkdown(scan) {
+    const s = scan?.summary || {};
+    const lines = [
+      `# Website Security Assessment`,
+      ``,
+      `**Target:** ${scan?.finalUrl || scan?.target || siteTarget}`,
+      `**Mode:** ${scan?.mode === "active" ? "Verified active checks" : "Passive assessment"}`,
+      `**Pages scanned:** ${s.pagesScanned || 0}`,
+      ``,
+      `## Findings`,
+    ];
+    if (!scan?.findings?.length) {
+      lines.push("", "No deterministic findings were produced by the bounded scanner. This does not mean the application has no vulnerabilities.");
+    } else {
+      for (const item of scan.findings) {
+        lines.push(
+          "",
+          `### ${item.title}`,
+          `**Severity: ${item.severity}**  `,
+          `**Confidence:** ${item.confidence || "Medium"}  `,
+          `**Category:** ${item.category || "Web security"}  `,
+          `**Page:** ${item.page || scan.target}`,
+          "",
+          `**Evidence:** ${item.evidence}`,
+          "",
+          `**Remediation:** ${item.recommendation}`,
+        );
+      }
+    }
+    lines.push(
+      "",
+      "## Scope limits",
+      "",
+      "This hosted assessment does not submit forms, attempt passwords, exploit vulnerabilities, access private networks, or perform destructive actions. Authenticated business-logic testing still requires a dedicated staging/sandbox test setup.",
+    );
+    return lines.join("\n");
+  }
+
+  async function auditWebsite() {
+    if (!connected) return setError("Connect Cyberouter before scanning a website.");
+    if (!siteTarget.trim()) return setError("Enter a website URL.");
+    if (!model) return setError("Choose a Cyberouter model.");
+    if (siteMode === "active" && !siteAuthorized) return setError("Confirm that you own the target or have explicit permission to test it.");
+    if (siteMode === "active" && !siteToken) return setError("Generate a verification token and publish the verification file first.");
+
+    setSiteBusy(true);
+    setError("");
+    setResult("");
+    setUsage(null);
+    setSiteScan(null);
+    setSiteProgress(siteMode === "active" ? "Verifying target ownership…" : "Mapping public attack surface…");
+
+    try {
+      const scan = await siteApi("/api/site/audit", {
+        method: "POST",
+        body: JSON.stringify({
+          target: siteTarget.trim(),
+          mode: siteMode,
+          authorizationToken: siteToken,
+          authorized: siteAuthorized,
+        }),
+      });
+      setSiteScan(scan);
+
+      if (siteMode === "active" && !scan?.verification?.ok) {
+        setResult([
+          "# Target verification required",
+          "",
+          scan?.verification?.reason || "The verification file could not be confirmed.",
+          "",
+          `Publish this exact token at \`${verificationUrl()}\` and run the scan again.`,
+          "",
+          `\`${siteToken}\``,
+        ].join("\n"));
+        setResultSource("website");
+        setSiteProgress("Verification did not pass");
+        return;
+      }
+
+      let repoContext = "";
+      if (correlateRepo && repoData?.tree?.candidates?.length) {
+        setSiteProgress("Reading linked repository context…");
+        const selected = selectAuditFiles(repoData.tree.candidates, 8);
+        const repo = repoData.repository;
+        const fileData = await githubApi("/api/github/files", {
+          method: "POST",
+          body: JSON.stringify({
+            owner: repo.owner,
+            repo: repo.name,
+            ref: repo.ref,
+            paths: selected.map((item) => item.path),
+          }),
+        });
+        repoContext = (fileData.files || [])
+          .filter((item) => item.content)
+          .map((item) => `===== ${item.path} =====\n${item.content}`)
+          .join("\n\n")
+          .slice(0, 30000);
+      }
+
+      setSiteProgress("Cyberouter is interpreting the web evidence…");
+      let report = "";
+      let reportUsage = null;
+      try {
+        const response = await modelCall([
+          {
+            role: "system",
+            content: "You are the lead defensive web application security reviewer. Interpret only the supplied evidence from an authorized bounded website assessment. Use OWASP WSTG and ASVS 5.0 concepts as a taxonomy, not as a claim of compliance. Separate confirmed observations from hypotheses that require authenticated or deeper testing. Do not invent endpoints, credentials, source behavior, or exploitability. Return clean GitHub-flavored Markdown. Include executive summary, attack surface, findings with severity and confidence, evidence, likely impact, remediation, what was not tested, and a prioritized retest plan.",
+          },
+          {
+            role: "user",
+            content: `Website evidence:\n${JSON.stringify(scan).slice(0, 62000)}${repoContext ? `\n\nLinked repository: ${repoData.repository.fullName}@${repoData.repository.ref}\nUse the source excerpts only to correlate web observations with likely implementation points.\n\n${repoContext}` : ""}`,
+          },
+        ], 4200);
+        report = response.text || "";
+        reportUsage = response.usage;
+      } catch {
+        report = "";
+      }
+
+      setResult(report || localSiteMarkdown(scan));
+      setUsage(reportUsage);
+      setResultSource("website");
+      setSiteProgress(`Finished · ${scan.summary?.pagesScanned || 0} pages · ${scan.findings?.length || 0} deterministic observations`);
+    } catch (err) {
+      setSiteProgress("");
+      setError(err.message);
+    } finally {
+      setSiteBusy(false);
     }
   }
 
@@ -581,6 +757,7 @@ export default function Home() {
 
       <nav className="surface-tabs">
         <button className={surface === "repositories" ? "active" : ""} onClick={() => setSurface("repositories")}>Repositories</button>
+        <button className={surface === "website" ? "active" : ""} onClick={() => setSurface("website")}>Website</button>
         <button className={surface === "playground" ? "active" : ""} onClick={() => setSurface("playground")}>Playground</button>
         <button className={surface === "connection" ? "active" : ""} onClick={() => setSurface("connection")}>Connection</button>
       </nav>
@@ -605,6 +782,101 @@ export default function Home() {
               <strong>Use Cyberouter beside Codex</strong>
               <p>Codex keeps its OpenAI model as the main agent and can call these Cyberouter models through the MCP tools. They do not become entries in Codex's native model picker.</p>
               <button className="ghost" onClick={copyCodexConfig}>{copied ? "Copied" : "Copy Codex config"}</button>
+            </div>
+          </section>
+        </section>
+      )}
+
+      {surface === "website" && (
+        <section className="site-layout">
+          <aside className="panel site-target-panel">
+            <div className="panel-head"><div><span className="step">01</span><h2>Target</h2></div></div>
+            <label className="field">
+              <span>Website URL</span>
+              <input value={siteTarget} placeholder="https://staging.example.com" onChange={(e) => { setSiteTarget(e.target.value); setSiteScan(null); }} />
+            </label>
+            <div className="privacy-note">
+              <span>Hosted scanner boundary</span>
+              <p>Public HTTP/HTTPS only. Private IPs, localhost, internal hostnames, non-standard ports, cross-host redirects, form submission, credential attacks, and exploit payloads are blocked.</p>
+            </div>
+            {repoData && (
+              <label className="check-row">
+                <input type="checkbox" checked={correlateRepo} onChange={(e) => setCorrelateRepo(e.target.checked)} />
+                <span>Correlate with {repoData.repository.fullName}<small>Cyberouter can compare web observations with a small set of security-relevant source files from the repository you already loaded.</small></span>
+              </label>
+            )}
+          </aside>
+
+          <section className="panel site-main">
+            <div className="panel-head">
+              <div><span className="step">02</span><h2>Website assessment</h2></div>
+              <select className="model-select" value={model} onChange={(e) => setModel(e.target.value)} disabled={!connected}>
+                {!connected && <option>Connect Cyberouter</option>}
+                {models.map((item) => <option value={item} key={item}>{item}</option>)}
+              </select>
+            </div>
+
+            <div className="scan-cards">
+              <button className={`scan-card ${siteMode === "passive" ? "selected" : ""}`} onClick={() => setSiteMode("passive")}>
+                <span className="scan-label">PASSIVE ASSESSMENT</span>
+                <strong>Public attack-surface review</strong>
+                <p>GET-only crawl of up to 6 same-host pages, browser security headers, cookies, forms, mixed content, security.txt and robots.txt.</p>
+              </button>
+              <button className={`scan-card ${siteMode === "active" ? "selected" : ""}`} onClick={() => setSiteMode("active")}>
+                <span className="scan-label">VERIFIED ACTIVE</span>
+                <strong>Ownership-gated checks</strong>
+                <p>Requires a file challenge on the target. Adds bounded CORS and HTTP-method checks without submitting forms or sending exploit payloads.</p>
+              </button>
+            </div>
+
+            {siteMode === "active" && (
+              <div className="verification-card">
+                <div className="verification-head">
+                  <div><span className="scan-label">DOMAIN VERIFICATION</span><strong>Prove control before active checks</strong></div>
+                  <button className="ghost" onClick={generateSiteToken}>{siteToken ? "New token" : "Generate token"}</button>
+                </div>
+                {siteToken ? (
+                  <>
+                    <p>Create a plain text file at:</p>
+                    <code className="verification-code">{verificationUrl()}</code>
+                    <p>Its entire contents must be:</p>
+                    <code className="verification-code">{siteToken}</code>
+                  </>
+                ) : <p>Generate a token, publish it at the well-known path, then run the verified scan.</p>}
+                <label className="check-row authorization-check">
+                  <input type="checkbox" checked={siteAuthorized} onChange={(e) => setSiteAuthorized(e.target.checked)} />
+                  <span>I own this target or have explicit permission to test it.<small>The scanner still remains bounded even after verification.</small></span>
+                </label>
+              </div>
+            )}
+
+            <div className="site-scope">
+              <span><b>No</b> password guessing</span>
+              <span><b>No</b> destructive requests</span>
+              <span><b>No</b> private-network access</span>
+              <span><b>No</b> form submission</span>
+            </div>
+
+            <div className="scan-actions">
+              <button className="primary" disabled={siteBusy || !connected || !siteTarget.trim()} onClick={auditWebsite}>
+                {siteBusy ? "Testing…" : siteMode === "active" ? "Run verified assessment" : "Run passive assessment"}
+              </button>
+              <div className="progress-copy">{siteProgress || (connected ? "Ready to assess" : "Connect Cyberouter first")}</div>
+            </div>
+
+            {siteScan && (
+              <div className="site-summary">
+                <div><strong>{siteScan.summary?.pagesScanned || 0}</strong><span>pages</span></div>
+                <div><strong>{siteScan.summary?.critical || 0}</strong><span>critical</span></div>
+                <div><strong>{siteScan.summary?.high || 0}</strong><span>high</span></div>
+                <div><strong>{siteScan.summary?.medium || 0}</strong><span>medium</span></div>
+                <div><strong>{siteScan.findings?.length || 0}</strong><span>observations</span></div>
+              </div>
+            )}
+
+            <div className="method-note">
+              <span className="scan-label">METHOD</span>
+              <p>Structured around OWASP WSTG web-testing categories and ASVS control areas. The hosted scan is deliberately bounded. Authenticated role abuse, business-logic abuse, exploit validation, and destructive testing belong in a disposable staging environment.</p>
             </div>
           </section>
         </section>
@@ -723,14 +995,14 @@ export default function Home() {
                 {severityCounts.high > 0 && <span className="risk-chip high">{severityCounts.high} high</span>}
                 {severityCounts.medium > 0 && <span className="risk-chip medium">{severityCounts.medium} medium</span>}
                 {severityCounts.low > 0 && <span className="risk-chip low">{severityCounts.low} low</span>}
-                {latestScan && repoData && <span className="coverage-chip">{latestScan.files} of {repoData.tree.reviewableFiles} reviewable files</span>}
+                {resultSource === "repo" && latestScan && repoData && <span className="coverage-chip">{latestScan.files} of {repoData.tree.reviewableFiles} reviewable files</span>}
               </div>
               <div className="report-actions">
                 <button className="ghost" onClick={copyReport}>{copied ? "Copied" : "Copy report"}</button>
                 <button className="ghost" onClick={downloadReport}>Download .md</button>
               </div>
             </div>
-            {latestScan && repoData && latestScan.files < repoData.tree.reviewableFiles && (
+            {resultSource === "repo" && latestScan && repoData && latestScan.files < repoData.tree.reviewableFiles && (
               <div className="coverage-note">
                 <strong>Coverage note</strong>
                 <span>This was a focused {latestScan.kind} scan, not a full review of all {repoData.tree.reviewableFiles} mapped files. New scans spread coverage across auth, API, data, frontend, and configuration code instead of letting one folder dominate.</span>
