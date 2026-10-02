@@ -1,5 +1,6 @@
 "use client";
 
+import { importSarif, MAX_SCANNER_BYTES } from "@/lib/scanner-import";
 import DependencyAudit from "@/components/dependency-audit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { CASEBOOK_VERSION, SEVERITIES, STATUSES, CONFIDENCES, MAX_CASES, MAX_FINDINGS, MAX_IMPORT_BYTES, createCase, normalizeFinding, normalizeThreat, uid, parseCasebook, casebookJSON, findingKey, compareCases, releaseReview, recordEvent, generateThreats, markdownHandoff, sarifExport, scanLocalRules, RULE_CATALOG } from "@/lib/security-casebook";
@@ -41,6 +42,9 @@ export default function SecurityWorkbench({ visible, incoming, onNavigate }) {
   const [localPath, setLocalPath] = useState("snippet.js");
   const [localCode, setLocalCode] = useState("");
   const importRef = useRef(null);
+  const scannerRef = useRef(null);
+  const [scannerTarget, setScannerTarget] = useState("");
+  const [scannerImportOpen, setScannerImportOpen] = useState(false);
   const incomingRef = useRef(null);
   const [issueCopied, setIssueCopied] = useState(false);
   const [editorError, setEditorError] = useState("");
@@ -113,6 +117,18 @@ export default function SecurityWorkbench({ visible, incoming, onNavigate }) {
       setCases(items => [...copies, ...items]); if (copies[0]) { switchCase(copies[0].id); setView("findings"); } setMessage(`Imported ${copies.length} case${copies.length === 1 ? "" : "s"} as copies. Existing cases were preserved.`); setError("");
     } catch (err) { setError(err.message); }
   }
+  async function importScanner(event) {
+    const file = event.target.files?.[0]; event.target.value = ""; if (!file) return;
+    try {
+      if (file.size > MAX_SCANNER_BYTES) throw new Error("Scanner report exceeds 8 MB.");
+      const output = importSarif(await file.text(), scannerTarget);
+      if (cases.length + output.cases.length > MAX_CASES) throw new Error("Not enough casebook capacity. Export and remove older cases before importing this report.");
+      setCases(items => [...output.cases, ...items]);
+      if (output.cases[0]) { switchCase(output.cases[0].id); setView("findings"); }
+      setError(""); setMessage(`Imported ${output.findings} scanner findings into ${output.cases.length} cases. ${output.ignored} pass/informational records omitted. Scanner evidence remains unverified.`);
+    } catch (err) { setError(err.message || "Scanner report could not be imported."); }
+  }
+
   function togglePersistence(checked) {
     try { if (!checked) localStorage.removeItem(STORAGE); setPersist(checked); setMessage(checked ? "Device saving enabled. Security evidence is stored unencrypted in this browser; API keys are excluded from the casebook." : "Device copy removed. Current cases remain in memory until refresh; export to keep them."); }
     catch { setError("This browser blocked storage access. Export work to keep it."); }
@@ -146,8 +162,9 @@ export default function SecurityWorkbench({ visible, incoming, onNavigate }) {
   return <section className="casebook" hidden={!visible} aria-label="Security casebook">
     <div className="casebook-top panel">
       <div><span className="section-caption">EVIDENCE → ACTION → VERIFICATION</span><h2>Security casebook</h2><p>Turn observations into reviewed decisions and track the fixes. Local tools work without a model connection.</p></div>
-      <div className="casebook-actions"><button type="button" className="primary" onClick={() => setNewCase(v => !v)}>New case</button><button type="button" className="ghost" onClick={() => importRef.current.click()}>Import JSON</button><button type="button" className="ghost" disabled={!cases.length} onClick={() => download(casebookJSON(cases), "cyberouter-casebook.json", "application/json")}>Export casebook</button><input ref={importRef} className="sr-only" type="file" accept=".json,application/json" aria-label="Import casebook JSON" onChange={importFile} /></div>
+      <div className="casebook-actions"><button type="button" className="primary" onClick={() => setNewCase(v => !v)}>New case</button><button type="button" className="ghost" onClick={() => importRef.current.click()}>Import JSON</button><button type="button" className="ghost" onClick={() => setScannerImportOpen(v => !v)}>Import scanner SARIF</button><button type="button" className="ghost" disabled={!cases.length} onClick={() => download(casebookJSON(cases), "cyberouter-casebook.json", "application/json")}>Export casebook</button><input ref={importRef} className="sr-only" type="file" accept=".json,application/json" aria-label="Import casebook JSON" onChange={importFile} /></div>
     </div>
+    {scannerImportOpen && <section className="panel casebook-section scanner-import"><h3>Bring external scanner evidence into the queue</h3><p>Import SARIF 2.1.0 exports from Semgrep, CodeQL, Trivy and other compatible tools. Parsing stays in this browser. Findings start open with Low confidence; pass records are omitted and suppression metadata requires fresh review. Reports up to 8 MB are split into cases of 250 findings without dropping actionable results.</p><Field label="Target repository / system" value={scannerTarget} onChange={setScannerTarget} maxLength={300} placeholder="team/service" /><button type="button" className="primary" disabled={!scannerTarget.trim()} onClick={() => scannerRef.current.click()}>Choose SARIF report</button><input type="file" hidden ref={scannerRef} accept=".sarif,.json,application/json" onChange={importScanner} /></section>}
     <div className="casebook-storage"><label className="check-row"><input type="checkbox" checked={persist} onChange={e => togglePersistence(e.target.checked)} /><span>Save cases on this device<small>{persist ? "Unencrypted browser storage · 30 cases / 4 MB · export a backup" : "Memory only · refreshing removes cases · export to keep your work"}</small></span></label><span className="casebook-version">Casebook v{CASEBOOK_VERSION} · {cases.length}/{MAX_CASES} cases</span></div>
     {message && <div className="casebook-notice" role="status"><span>{message}</span><button type="button" className="text-button" onClick={() => setMessage("")}>Dismiss</button></div>}
     {error && <div className="error-box" role="alert">{error}<button type="button" className="text-button" onClick={() => setError("")}>Dismiss</button></div>}

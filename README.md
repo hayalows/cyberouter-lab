@@ -152,3 +152,41 @@ The Casebook's **Dependency exposure** tool reads npm package-lock / shrinkwrap 
 **Check selected versions** sends only selected npm names, exact versions and display paths through `/api/dependencies/audit` to the fixed OSV.dev advisory API. It does not send the full lockfile or source to OSV. The server bounds concurrency to five requests and the overall lookup to 40 seconds; each package's list is capped at 25 non-withdrawn advisories. Errors and truncation are explicit. The public GET path accepts one npm `name` and exact `version` for read-only inspection.
 
 Matched advisories can be captured in a case (up to 250 findings with a visible cap notice); full lookup JSON can be exported separately. Advisory severity is used only when supplied in OSV's database metadata; missing severity gets a provisional Medium triage value. Fixed versions may belong to different release branches: inspect the advisory before choosing an upgrade. A version match is not proof of runtime exploitability, and a failed or empty lookup must not be treated as verified absence of risk. This tool currently supports npm, not other package ecosystems.
+
+## Whole-codebase Deep Audit
+
+**Deep Audit** now uses a full supported-text manifest instead of the earlier 48-file sample. It resolves the repository revision, lists supported and excluded entries, and reviews contiguous excerpts of up to 24,000 characters / 400 lines. Each successfully reviewed excerpt records its character range, source lines and model notes. Long lines are split without dropping characters. Common credential redaction runs on the complete file before chunking; private-key redaction preserves line boundaries. The GitHub chunk endpoint requires a pinned commit and relative path.
+
+Supported text includes application code, tests, configuration, styles, markup, documentation and lockfiles, including text under directories the quick scan normally excludes. Limits are explicit: files over 1 MB, binaries/unsupported formats, symlinks, submodules, real `.env` configurations and key/credential files are excluded. The hosted manifest limit is 20,000 non-directory entries. A truncated recursive GitHub listing triggers directory-by-directory discovery; any failed listing or limit leaves coverage incomplete. GitHub anonymous API rate limits make a read-only token advisable for longer jobs. A failed file can be retried or deliberately skipped while retaining an explicit coverage gap; skipped files never count as reviewed.
+
+The full review remains in this browser tab. **Pause after current step** finishes the active request and resumes at the next unreviewed excerpt. **Download checkpoint** creates versioned JSON continuity data (up to 32 MB) containing notes and ledger metadata, not API keys or full raw source. Imports validate contiguous ranges, retain explicit unverified provenance and resume at the pinned commit with the same model. Browser refresh is not automatic persistence. Never treat an imported checkpoint as independently verified coverage.
+
+After source review, hierarchical synthesis processes all review notes in bounded groups. A system assessment and skeptical evidence challenge then identify uncertain claims and safe falsification checks. The relative-import map resolves recorded JS/TS relative references (up to 200 imports/file); it is not an AST or complete call/data-flow graph. Unresolved aliases and references remain visible. Synthesis is lossy reasoning over notes, not fresh runtime testing. Per-file notes, all recorded import references and every exclusion can be downloaded separately from the consolidated assessment. The existing Casebook limits (1,000 paths, 120,000 report characters and extraction limits) remain distinct from the full audit ledger.
+
+Coverage measures successful processing of supported lines after credential redaction. It cannot guarantee model understanding, exhaustive vulnerability detection or complete security. Deep jobs can generate many model requests and incur provider costs; the UI requires scope/cost acknowledgment before a new job.
+
+## Connected investigations and free evidence sources
+
+The **Investigate** workspace connects up to four related GitHub repositories to read-only metadata snapshots: recent commits, declared license, archive state, standard security policy paths and default-branch protection metadata. These are maintenance signals, not security ratings. Opening a connected codebase preloads it in the repository workspace for a separate pinned source audit. Private repositories use the optional session GitHub token; that token is sent only to GitHub.
+
+CVE context comes from fixed public endpoints:
+
+- CISA Known Exploited Vulnerabilities catalog: recorded exploitation context, with catalog date.
+- FIRST EPSS: dated estimates of exploitation probability and percentile, not application exposure.
+- OSV: vulnerability records and named affected ecosystems/packages where a CVE record exists.
+
+Every source reports its own availability. Absence from a catalog, lack of an EPSS score, withdrawn data or a failed lookup never implies safety. CVE IDs and repository identifiers are sent only when the corresponding lookup is requested; no arbitrary remote URLs are fetched by the intelligence route. Source requests have time and response-size bounds. Public providers are free but impose rate limits and may be unavailable.
+
+**Evidence bridge** combines connected snapshots, the current source report, CVE context and website observations. With a Cyberouter connection it proposes up to six hypotheses, each citing at least two available source IDs and specifying assumptions, a safe verification plan and explicit falsification criteria. Evidence excerpts are capped at 16,000 characters per source; findings remain low-confidence hypotheses with provisional severity. Metadata and dependency presence do not establish runtime reachability. Hypotheses can be captured as Casebook work. Intelligence attached before a new deep audit also enters its bounded reasoning context.
+
+## Extended owned website crawl
+
+The Website workspace offers an extended crawl of 12, 30 or 60 pages with optional same-host seed paths. Domain control and explicit ownership authorization are required; the server rechecks the verification file before every page read. Requests use the same private/reserved-network, hostname, standard-port and redirect protections as existing website checks.
+
+The crawl follows anonymous same-host GET links, removes query variants from discovery, avoids common state-changing routes, and submits no forms or exploit payloads. Each page records headers, cookie attributes without values, forms, technologies, deterministic observations, truncation and remaining queued paths. Response bodies are streamed with a byte/character bound and a body deadline. The www alias follows the same hostname equivalence as the existing scanner. Link discovery is bounded to 80 links/page and the queue to 1,000 entries. Page-budget exhaustion and pauses stay visible; exports include the remaining queue. Casebook capture is capped at 250 observations with a notice; full crawl JSON retains all recorded observations.
+
+This is not authenticated browser automation, a full penetration test, JavaScript execution or proof that all routes were discovered. Unlinked routes, query-dependent behavior and authenticated business logic still need owned test environments and explicit verification.
+
+## External scanner evidence
+
+Casebook **Import scanner SARIF** accepts SARIF 2.1.0 exports from tools such as Semgrep, CodeQL and Trivy (up to 8 MB). Parsing stays in the browser. Actionable records are split into cases of at most 250 findings; insufficient casebook capacity rejects the entire import. Pass/not-applicable/informational records are omitted, the first result location is mapped, and external suppressions do not become local acceptance decisions. Imported findings start open with Low confidence. Keep the original report for full traces, tool configuration and provenance. No scanner is automatically installed or executed against a connected repository.

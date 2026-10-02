@@ -7,6 +7,7 @@ const ITEMS = [
   { id: "website", label: "Website", hint: "Live" },
   { id: "playground", label: "Playground", hint: "Prompt" },
   { id: "casebook", label: "Casebook", hint: "Act & verify" },
+  { id: "research", label: "Investigate", hint: "Connect" },
   { id: "connection", label: "Connection", hint: "Setup" },
 ];
 

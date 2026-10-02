@@ -8,6 +8,9 @@ import UseLayoutsStatusButton from "@/components/uselayouts/status-button";
 import UseLayoutsBentoCard from "@/components/uselayouts/bento-card";
 import UseLayoutsSmoothDropdown from "@/components/uselayouts/smooth-dropdown";
 import UseLayoutsDynamicToolbar from "@/components/uselayouts/dynamic-toolbar";
+import FullAudit from "@/components/full-audit";
+import ResearchDesk from "@/components/research-desk";
+import DeepWebsite from "@/components/deep-website";
 import SecurityWorkbench from "@/components/security-workbench";
 import { createCase, parseModelFindings, scanLocalRules } from "@/lib/security-casebook";
 import { detectSensitiveSignals, redactSensitiveText } from "@/lib/sensitive-content";
@@ -34,6 +37,11 @@ const MODES = {
 };
 
 const SURFACE_COPY = {
+  research: {
+    eyebrow: "CONNECTED INVESTIGATIONS",
+    title: "Connect evidence. Challenge assumptions.",
+    description: "Bring together related repositories, vulnerability intelligence and observed website behavior to investigate what isolated scans can miss.",
+  },
   casebook: {
     eyebrow: "SECURITY OPERATIONS",
     title: "Turn evidence into decisions.",
@@ -202,6 +210,7 @@ export default function Home() {
   const [status, setStatus] = useState("Not connected");
   const [result, setResult] = useState("");
   const [usage, setUsage] = useState(null);
+  const [intelligence, setIntelligence] = useState(null);
   const [incomingCase, setIncomingCase] = useState(null);
   const [captureBusy, setCaptureBusy] = useState(false);
   const [reportMeta, setReportMeta] = useState(null);
@@ -259,7 +268,7 @@ export default function Home() {
           ? "Cyberouter response"
           : "Security report";
   const surfaceCopy = SURFACE_COPY[surface] || SURFACE_COPY.repositories;
-  const scanLimit = scanKind === "deep" ? 48 : 18;
+  const scanLimit = 18;
   const candidates = repoData?.tree?.candidates || [];
   const recommendedFiles = selectAuditFiles(candidates, scanLimit);
   const matchingCandidates = customScope
@@ -469,12 +478,13 @@ export default function Home() {
     return { text: extractText(data), usage: data?.usage || null, redactionCount };
   }
 
-  async function scanRepository(kind = scanKind) {
+  async function scanRepository() {
+    const kind = "quick";
     if (!connected) return setError("Connect Cyberouter before scanning a repository.");
     if (!repoData) return setError("Load a repository first.");
     if (!model) return setError("Choose a Cyberouter model.");
     if (customScope && selectedPaths.length === 0) return setError("Choose at least one file, or switch back to recommended coverage.");
-    const limit = kind === "deep" ? 48 : 18;
+    const limit = 18;
     if (customScope && selectedPaths.length > limit) return setError(`This ${kind === "deep" ? "deep audit" : "quick scan"} can review up to ${limit} selected files. Remove ${selectedPaths.length - limit} file${selectedPaths.length - limit === 1 ? "" : "s"} or choose the deeper audit.`);
 
     setRepoBusy(true);
@@ -934,7 +944,7 @@ export default function Home() {
         </div>
       </section>
 
-      {surface !== "casebook" && <UseLayoutsBentoCard
+      {!["casebook", "research"].includes(surface) && <UseLayoutsBentoCard
         connected={connected}
         model={model}
         repoName={repoData?.repository?.fullName || ""}
@@ -943,6 +953,7 @@ export default function Home() {
       />}
 
       <UseLayoutsDiscreteTabs value={surface} onChange={setSurface} />
+      <ResearchDesk visible={surface === "research"} githubApi={githubApi} modelCall={modelCall} connected={connected} report={result} reportMeta={reportMeta} website={siteScan} onEvidence={setIntelligence} onOpenRepository={(name) => { setRepoInput(name); setRepoRef(""); setSurface("repositories"); }} onCapture={openCase} />
       <SecurityWorkbench visible={surface === "casebook"} incoming={incomingCase} onNavigate={setSurface} />
 
       {error && <div className="error-box global-error" role="alert"><span>{error}</span><button type="button" className="error-dismiss" onClick={() => setError("")}>Dismiss</button></div>}
@@ -1153,29 +1164,29 @@ export default function Home() {
                   </button>
                 <button type="button" aria-pressed={scanKind === "deep"} className={`scan-card ${scanKind === "deep" ? "selected" : ""}`} onClick={() => setScanKind("deep")}>
                     <span className="scan-label">DEEP AUDIT</span>
-                    <strong>Broader codebase review</strong>
-                    <p>Reviews up to 48 security-ranked files in multiple model passes, then consolidates the findings.</p>
+                    <strong>Whole-codebase investigation</strong>
+                    <p>Reviews every supported text file in contiguous chunks, records line coverage, maps imports and challenges the combined evidence.</p>
                   </button>
                 </div>
 
-                <div className="scan-actions">
+                <div className="scan-actions" hidden={scanKind === "deep"}>
                   <UseLayoutsStatusButton
                     busy={repoBusy}
                     disabled={repoBusy || !connected || (customScope && (selectedPaths.length === 0 || selectedPaths.length > scanLimit))}
-                    idleLabel={scanKind === "deep" ? "Start deep audit" : "Start quick scan"}
+                    idleLabel="Start quick scan"
                     busyLabel="Running security review…"
-                    onClick={() => scanRepository(scanKind)}
+                    onClick={scanRepository}
                   />
                   <div className="progress-copy" aria-live="polite">{repoProgress || (connected ? "Ready to scan" : "Connect Cyberouter first")}</div>
                 </div>
 
-                <div className="repo-local-action"><div><strong>Local checks · no model required</strong><p>Review source patterns at the pinned commit and send observations to the casebook.</p></div><button type="button" className="ghost" disabled={repoBusy} onClick={runRepositoryRules}>Run local checks</button></div>
+                <div className="repo-local-action" hidden={scanKind === "deep"}><div><strong>Local checks · no model required</strong><p>Review source patterns at the pinned commit and send observations to the casebook.</p></div><button type="button" className="ghost" disabled={repoBusy} onClick={runRepositoryRules}>Run local checks</button></div>
                 <div className="pr-row">
                   <div><span className="scan-label">PULL REQUEST REVIEW</span><p>Review only the code changed by a PR for new security regressions.</p></div>
                   <div className="pr-controls"><label className="sr-only" htmlFor="pull-request-number">Pull request number</label><input id="pull-request-number" type="number" min="1" value={prNumber} placeholder="PR #" onChange={(e) => setPrNumber(e.target.value)} /><button type="button" className="ghost" disabled={repoBusy || !connected} onClick={reviewPullRequest}>Review PR</button></div>
                 </div>
 
-                <section className="scope-control" aria-labelledby="scope-title">
+                <section className="scope-control" hidden={scanKind === "deep"} aria-labelledby="scope-title">
                   <div className="scope-head">
                     <div>
                       <span className="section-caption">COVERAGE</span>
@@ -1226,7 +1237,9 @@ export default function Home() {
         </section>
       )}
 
-      <section className="panel output-panel" hidden={surface === "casebook"} aria-labelledby="report-heading">
+      <FullAudit visible={surface === "repositories" && scanKind === "deep"} repositoryData={repoData} connected={connected} model={model} githubApi={githubApi} modelCall={modelCall} intelligence={intelligence} onCapture={openCase} onReport={({ text, meta }) => { setResult(text); setReportMeta(meta); setResultSource("repo"); setResultNotice(meta.scope); setUsage(null); }} />
+      <DeepWebsite visible={surface === "website"} target={siteTarget} token={siteToken} authorized={siteAuthorized} connected={connected} siteApi={siteApi} onEvidence={setSiteScan} onCapture={openCase} />
+      <section className="panel output-panel" hidden={["casebook", "research"].includes(surface)} aria-labelledby="report-heading">
         <div className="panel-head">
           <div><span className="step">REPORT</span><h2 id="report-heading">{reportTitle}</h2></div>
           {usage && <div className="usage">{usage.prompt_tokens != null && <span>In {usage.prompt_tokens.toLocaleString()}</span>}{usage.completion_tokens != null && <span>Out {usage.completion_tokens.toLocaleString()}</span>}{usage.total_tokens != null && <span>Total {usage.total_tokens.toLocaleString()}</span>}</div>}
@@ -1240,7 +1253,7 @@ export default function Home() {
                 {severityCounts.high > 0 && <span className="risk-chip high">{severityCounts.high} high</span>}
                 {severityCounts.medium > 0 && <span className="risk-chip medium">{severityCounts.medium} medium</span>}
                 {severityCounts.low > 0 && <span className="risk-chip low">{severityCounts.low} low</span>}
-                {resultSource === "repo" && latestScan && repoData && <span className="coverage-chip">{latestScan.files} of {repoData.tree.reviewableFiles} reviewable files</span>}
+                {resultSource === "repo" && reportMeta?.kind !== "repo-whole" && latestScan && repoData && <span className="coverage-chip">{latestScan.files} of {repoData.tree.reviewableFiles} reviewable files</span>}
               </div>
               <div className="report-actions">
                 {reportMeta && <button type="button" className="primary" disabled={captureBusy || repoBusy || siteBusy || busy} onClick={() => captureReport(true)}>{captureBusy ? "Capturing…" : "Extract to casebook"}</button>}
@@ -1253,7 +1266,7 @@ export default function Home() {
               />
               </div>
             </div>
-            {resultSource === "repo" && latestScan && repoData && latestScan.files < repoData.tree.reviewableFiles && (
+            {resultSource === "repo" && reportMeta?.kind !== "repo-whole" && latestScan && repoData && latestScan.files < repoData.tree.reviewableFiles && (
               <div className="coverage-note">
                 <strong>Coverage note</strong>
                 <span>This focused {latestScan.kind} scan reviewed {latestScan.files} of {repoData.tree.reviewableFiles} mapped files. {latestScan.scope === "custom" ? "You chose the file paths; this report may omit important behavior in other parts of the repository." : "The automatic selection spreads attention across high-signal runtime, auth, API, data, frontend, and configuration paths."}</span>

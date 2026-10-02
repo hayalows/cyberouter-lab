@@ -15,6 +15,7 @@ const DEFAULT_ITEMS = [
   { id: "website", label: "Website", hint: "Live", icon: DashboardSquare01Icon },
   { id: "playground", label: "Playground", hint: "Prompt", icon: Message01Icon },
   { id: "casebook", label: "Casebook", hint: "Act & verify", icon: File01Icon },
+  { id: "research", label: "Investigate", hint: "Connect", icon: DashboardSquare01Icon },
   { id: "connection", label: "Connection", hint: "Setup", icon: Settings02Icon },
 ];
 

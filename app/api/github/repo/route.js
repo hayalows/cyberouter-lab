@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { buildManifest, MAX_MANIFEST } from "@/lib/deep-audit";
 import { githubError, githubJson, githubTokenFromRequest, rankTree } from "@/lib/github";
 
 export const dynamic = "force-dynamic";
@@ -47,6 +48,8 @@ export async function GET(request) {
     );
   }
 
+  const entries = (tree.data.tree || []).filter(e => e.type !== "tree");
+  const deep = buildManifest(entries.slice(0, MAX_MANIFEST));
   const candidates = rankTree(tree.data.tree || []);
   const directories = new Set(candidates.map((item) => item.path.split("/").slice(0, -1).join("/")).filter(Boolean));
 
@@ -59,6 +62,7 @@ export async function GET(request) {
       defaultBranch: metadata.data.default_branch,
       ref,
       commitSha,
+      treeSha,
       description: metadata.data.description || "",
       htmlUrl: metadata.data.html_url,
       pushedAt: metadata.data.pushed_at,
@@ -70,6 +74,7 @@ export async function GET(request) {
       directories: directories.size,
       candidates: candidates.slice(0, 320),
     },
+    deep: { ...deep, incomplete: Boolean(tree.data.truncated) || entries.length > MAX_MANIFEST, mappedEntries: entries.length, limit: MAX_MANIFEST },
     auth: { usingToken: Boolean(token) },
     rate: tree.rate,
   }, {
