@@ -7,12 +7,14 @@ import {
   DashboardSquare01Icon,
   Message01Icon,
   Settings02Icon,
+  File01Icon,
 } from "@hugeicons/core-free-icons";
 
 const DEFAULT_ITEMS = [
   { id: "repositories", label: "Repositories", hint: "Source", icon: Folder02Icon },
   { id: "website", label: "Website", hint: "Live", icon: DashboardSquare01Icon },
   { id: "playground", label: "Playground", hint: "Prompt", icon: Message01Icon },
+  { id: "casebook", label: "Casebook", hint: "Act & verify", icon: File01Icon },
   { id: "connection", label: "Connection", hint: "Setup", icon: Settings02Icon },
 ];
 
@@ -28,6 +30,7 @@ export default function UseLayoutsDiscreteTabs({ value, onChange, items = DEFAUL
             key={item.id}
             type="button"
             className={`ul-discrete-tab ${active ? "active" : ""}`}
+            aria-label={item.label}
             aria-current={active ? "page" : undefined}
             onClick={() => onChange(item.id)}
             layout
@@ -44,7 +47,7 @@ export default function UseLayoutsDiscreteTabs({ value, onChange, items = DEFAUL
             >
               <HugeiconsIcon icon={item.icon} width={18} height={18} />
             </motion.span>
-            {active && (
+            {(
               <motion.span
                 className="ul-discrete-tab-label"
                 initial={reduceMotion ? false : { opacity: 0, filter: "blur(2px)" }}
@@ -52,7 +55,7 @@ export default function UseLayoutsDiscreteTabs({ value, onChange, items = DEFAUL
                 transition={reduceMotion ? { duration: 0 } : { duration: 0.16, ease: [0.22, 1, 0.36, 1] }}
               >
                 <strong>{item.label}</strong>
-                <small>{item.hint}</small>
+                {active && <small>{item.hint}</small>}
               </motion.span>
             )}
           </motion.button>

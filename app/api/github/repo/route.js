@@ -26,8 +26,17 @@ export async function GET(request) {
   }
 
   const ref = requestedRef || metadata.data.default_branch;
+  const revision = await githubJson(
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(ref)}`,
+    { token },
+  );
+  if (!revision.ok || !revision.data?.sha) {
+    return NextResponse.json({ error: githubError(revision, "Could not resolve an immutable repository revision.") }, { status: revision.status === 404 ? 404 : 502 });
+  }
+  const commitSha = revision.data.sha;
+  const treeSha = revision.data.commit?.tree?.sha || commitSha;
   const tree = await githubJson(
-    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(ref)}?recursive=1`,
+    `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(treeSha)}?recursive=1`,
     { token },
   );
 
@@ -49,6 +58,7 @@ export async function GET(request) {
       private: Boolean(metadata.data.private),
       defaultBranch: metadata.data.default_branch,
       ref,
+      commitSha,
       description: metadata.data.description || "",
       htmlUrl: metadata.data.html_url,
       pushedAt: metadata.data.pushed_at,

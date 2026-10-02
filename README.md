@@ -127,3 +127,28 @@ Motion is used for feedback and orientation, with a reduced-motion fallback.
 ## useLayouts components
 
 Five useLayouts components were incorporated into the production interface: Discrete Tabs, Dynamic Toolbar, Smooth Dropdown, Bento Card, and Save Button. The upstream source snapshots are preserved under `third_party/uselayouts/upstream/` with the original MIT license. Production adapters live under `components/uselayouts/` and keep the original interaction patterns while mapping them to Cyberouter Lab's existing state and dark security-workbench visual system.
+
+## Security casebook
+
+The **Casebook** turns an assessment into an evidence and remediation workflow:
+
+- Capture repository, PR, playground and website reports. **Extract to casebook** makes an explicit additional Cyberouter request for structured finding data (up to 40 findings / 65,000 report characters). Invalid JSON is rejected and the original report remains available. Review extraction for missed findings, incorrect paths and unsupported evidence.
+- **Capture web observations** saves deterministic website checks without another model request. **Save report as case** preserves other reports for manual triage.
+- Run nine local source-pattern checks on a selected repository scope or pasted code, without a model connection. These are heuristics, not data-flow analysis or dependency vulnerability scanning. Pasted source is discarded after checking; redacted observations enter the case.
+- Separate severity and confidence; search and filter findings; assign an owner and UTC due date; track open, investigating, resolved, accepted-risk and false-positive decisions. Resolution requires a reviewer and retest evidence. Risk acceptance and false-positive classification require a reviewer and rationale.
+- Compare assessments by rule, path and normalized title (line shifts are ignored). Comparability requires the same target, check kind and observed paths. Changed model wording can change identity. Missing observations are not automatically resolved. Coverage and runtime differences still require human review.
+- Review unresolved findings against a severity threshold. A named scope reviewer and coverage/exclusion note are required before a decision can have no policy blockers. This is a local review aid, not an automated deployment gate or certification.
+- Generate a STRIDE worksheet for up to eight declared trust boundaries. All questions begin unreviewed; ratings are estimates, not CVSS. Record mitigations and verification, then promote a hypothesis into a finding when it needs tracking.
+- Export Markdown handoffs, SARIF 2.1.0, and versioned JSON backups. Import accepts Cyberouter JSON exports up to 4 MB, validates disposition requirements and creates copies instead of replacing existing cases. It does not upload reports to GitHub.
+
+Case data stays in browser memory by default. Refresh removes it. Opt-in **Save cases on this device** uses unencrypted localStorage, capped at 30 cases / 4 MB. Turning it off removes the saved device copy and retains current work in memory. JSON export is the backup and transfer mechanism. Keys and tokens are not fields in the casebook; common secret patterns in case text are redacted, but review all material before saving or sharing. Browser storage is not a secure vault. Local activity is editable data, not an immutable audit trail. There is no server account, shared team workspace or cross-device synchronization.
+
+Repository maps resolve a branch or tag to a commit; subsequent source reads use that commit to avoid mixing revisions. Refresh the repository map before a new assessment if you want newer source. Scope notes include unreadable files, excerpt truncation and GitHub tree truncation.
+
+### Dependency exposure and SBOM
+
+The Casebook's **Dependency exposure** tool reads npm package-lock / shrinkwrap v1–v3 or exact package.json versions in the browser. It deduplicates name/version pairs, supports a development-package filter and lets you choose up to 80 resolved versions per lookup. Ranges and unresolved/git/file entries are omitted rather than guessed. A CycloneDX 1.6 JSON inventory export includes all eligible parsed versions for that filter; it describes the supplied file, not a verified deployed environment.
+
+**Check selected versions** sends only selected npm names, exact versions and display paths through `/api/dependencies/audit` to the fixed OSV.dev advisory API. It does not send the full lockfile or source to OSV. The server bounds concurrency to five requests and the overall lookup to 40 seconds; each package's list is capped at 25 non-withdrawn advisories. Errors and truncation are explicit. The public GET path accepts one npm `name` and exact `version` for read-only inspection.
+
+Matched advisories can be captured in a case (up to 250 findings with a visible cap notice); full lookup JSON can be exported separately. Advisory severity is used only when supplied in OSV's database metadata; missing severity gets a provisional Medium triage value. Fixed versions may belong to different release branches: inspect the advisory before choosing an upgrade. A version match is not proof of runtime exploitability, and a failed or empty lookup must not be treated as verified absence of risk. This tool currently supports npm, not other package ecosystems.

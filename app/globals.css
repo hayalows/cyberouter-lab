@@ -1332,3 +1332,148 @@ footer { color: #8d9b9f; font-size: 11px; }
   .ul-bento-card { display: none; }
   .ul-discrete-tab-label strong { font-size: 9px; }
 }
+
+/* Evidence workflow: shared semantic colors and native form behavior. */
+[hidden] { display: none !important; }
+.casebook { margin-bottom: 24px; }
+.casebook h2 { font-size: 24px; letter-spacing: -.035em; margin: 8px 0; }
+.casebook h3 { font-size: 17px; margin: 0 0 8px; letter-spacing: -.02em; }
+.casebook h4 { margin: 24px 0 12px; }
+.casebook p { color: var(--muted); font-size: 13px; line-height: 1.7; }
+.casebook-top { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 26px; }
+.casebook-top p { max-width: 580px; margin-bottom: 0; }
+.casebook-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.casebook-actions button { min-height: 44px; }
+.casebook-storage { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 4px; }
+.casebook-storage .check-row { margin: 0; }
+.casebook-version, .casebook-muted { font-size: 12px; color: var(--muted); }
+.casebook-notice { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 14px 16px; margin: 0 0 16px; border: 1px solid var(--line); background: var(--panel-2); border-radius: 12px; font-size: 13px; }
+.casebook-notice strong { font-size: 13px; }
+.casebook-notice > span { color: var(--soft); }
+.casebook .error-box { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.casebook-create { padding: 24px; margin-bottom: 16px; }
+.casebook-create > button { margin: 18px 8px 0 0; }
+.casebook-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.casebook-layout { display: grid; grid-template-columns: 245px minmax(0, 1fr); align-items: start; gap: 16px; }
+.casebook-sidebar { padding: 16px; }
+.casebook-sidebar > h3 { padding: 8px 6px; }
+.casebook-sidebar > button { width: 100%; margin-top: 16px; }
+.case-list { display: flex; flex-direction: column; gap: 8px; max-height: 600px; overflow-y: auto; }
+.case-row { display: flex; flex-direction: column; gap: 5px; text-align: left; width: 100%; border: 1px solid transparent; background: transparent; color: var(--soft); padding: 13px; border-radius: 12px; overflow-wrap: anywhere; }
+.case-row:hover { background: var(--panel-2); border-color: var(--line); }
+.case-row.active { background: rgba(201,247,106,.065); border-color: rgba(201,247,106,.45); color: var(--text); }
+.case-row strong { font-size: 13px; }
+.case-row span { font-size: 12px; color: var(--muted); }
+.case-row small { font-size: 11px; color: var(--muted); }
+.casebook-main { min-width: 0; }
+.casebook-section { padding: 24px; }
+.casebook-case-head { display: flex; justify-content: space-between; align-items: start; gap: 16px; }
+.casebook-case-head h2 { font-size: 21px; overflow-wrap: anywhere; }
+.casebook-case-head p { margin-bottom: 8px; overflow-wrap: anywhere; }
+.casebook-commit { display: block; font-size: 11px; overflow-wrap: anywhere; }
+.casebook-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 16px 0; border: 1px solid var(--line); border-radius: 14px; background: var(--panel-2); overflow: hidden; }
+.casebook-metrics > div { padding: 18px; border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 5px; }
+.casebook-metrics > div:last-child { border: 0; }
+.casebook-metrics strong { font-size: 26px; font-weight: 650; letter-spacing: -.04em; }
+.casebook-metrics span { font-size: 11px; color: var(--muted); }
+.casebook-subnav { display: flex; flex-wrap: wrap; gap: 4px; padding: 5px; margin-bottom: 16px; border: 1px solid var(--line); border-radius: 12px; }
+.casebook-subnav button { flex: 1; min-height: 44px; padding: 9px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); font-size: 12px; white-space: nowrap; }
+.casebook-subnav button.active { background: #253135; color: var(--text); }
+.casebook-section-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.casebook-section-head p { margin-bottom: 0; }
+.casebook-filters { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(110px, .7fr) minmax(110px, .7fr); gap: 12px; padding-bottom: 20px; margin-bottom: 20px; border-bottom: 1px solid var(--line); }
+.finding-workspace { display: grid; grid-template-columns: minmax(180px, .75fr) minmax(0, 1.25fr); gap: 20px; align-items: start; }
+.finding-list { display: flex; flex-direction: column; gap: 8px; }
+.finding-row { display: flex; flex-direction: column; gap: 9px; padding: 16px; border: 1px solid var(--line); background: var(--panel-2); border-radius: 12px; color: var(--text); text-align: left; width: 100%; overflow-wrap: anywhere; }
+.finding-row > div { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.finding-row:hover { border-color: #687c80; }
+.finding-row.active { border-color: var(--accent); }
+.finding-row strong { font-size: 13px; line-height: 1.55; }
+.finding-row small, .finding-path { color: var(--muted); font-size: 11px; }
+.finding-editor { min-width: 0; padding-left: 20px; border-left: 1px solid var(--line); }
+.finding-editor .field:first-of-type { margin-top: 12px; }
+.casebook input, .casebook select, .casebook textarea { width: 100%; min-width: 0; }
+.casebook input[type="checkbox"] { width: 18px; flex-shrink: 0; }
+.casebook textarea { min-height: 90px; resize: vertical; }
+.casebook .field > span { font-size: 12px; }
+.casebook-empty { padding: 24px 12px; color: var(--muted); font-size: 13px; }
+.casebook-empty h2, .casebook-empty h3 { color: var(--text); }
+.casebook-empty span { display: block; font-size: 12px; line-height: 1.7; }
+.casebook-empty .text-button { margin-top: 16px; }
+.finding-placeholder { border: 1px dashed #45565b; border-radius: 12px; padding: 28px; }
+.finding-placeholder ol { padding-left: 18px; line-height: 2; font-size: 13px; }
+.casebook-details { border-top: 1px solid var(--line); margin-top: 20px; padding-top: 16px; font-size: 12px; }
+.casebook-details summary { cursor: pointer; min-height: 36px; color: var(--soft); }
+.casebook-details summary:focus-visible { outline: 3px solid var(--focus); outline-offset: 4px; }
+.casebook-details li { overflow-wrap: anywhere; margin: 8px 0; }
+.casebook-source { white-space: pre-wrap; overflow-wrap: anywhere; background: var(--panel-2); padding: 16px; font-size: 12px; max-height: 500px; overflow: auto; }
+.casebook-flow { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 32px; border-top: 1px solid var(--line); padding-top: 24px; gap: 24px; }
+.casebook-flow strong { display: block; color: var(--soft); margin-bottom: 8px; }
+.release-verdict { display: flex; flex-direction: column; gap: 6px; margin: 20px 0; padding: 22px; border: 1px solid #6e853b; border-radius: 12px; background: rgba(201,247,106,.04); }
+.release-verdict strong { font-size: 22px; }
+.release-verdict span { color: var(--muted); font-size: 12px; }
+.release-verdict.blocked { border-color: #bc6a62; background: rgba(255,145,136,.035); }
+.release-finding { display: flex; align-items: center; gap: 12px; width: 100%; padding: 14px 0; background: transparent; color: var(--text); border: 0; border-bottom: 1px solid var(--line); text-align: left; }
+.release-finding strong { font-size: 13px; flex: 1; }
+.release-finding > span:last-child { font-size: 12px; color: var(--muted); }
+.comparison-group { border-top: 1px solid var(--line); }
+.comparison-group p { color: var(--soft); }
+.comparison-group small { display: block; margin: 4px 0 12px; color: var(--muted); overflow-wrap: anywhere; }
+.threat-card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: var(--panel-2); }
+.threat-card summary strong { margin-right: 10px; }
+.threat-card summary span { color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
+.threat-list { margin-top: 20px; }
+.casebook-activity { padding-left: 18px; }
+.casebook-activity li { padding: 12px 0; font-size: 12px; border-bottom: 1px solid var(--line); }
+.casebook-activity time { display: block; color: var(--muted); margin-bottom: 4px; }
+.casebook-activity span { overflow-wrap: anywhere; }
+.repo-local-action { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-top: 22px; padding-top: 22px; border-top: 1px solid var(--line); }
+.repo-local-action strong { font-size: 13px; }
+.repo-local-action p { font-size: 12px; color: var(--muted); margin: 6px 0 0; }
+.repo-local-action button { flex-shrink: 0; }
+.report-actions { flex-wrap: wrap; }
+.risk-chip.info { border-color: #6e8d9b; color: #c1dce8; background: #17242b; }
+@media (max-width: 1050px) {
+  .casebook-top, .casebook-case-head { flex-direction: column; }
+  .casebook-layout { grid-template-columns: 210px minmax(0, 1fr); }
+  .finding-workspace { grid-template-columns: 1fr; }
+  .finding-editor { padding: 20px 0 0; border-left: 0; border-top: 1px solid var(--line); }
+  .finding-list { max-height: 380px; overflow-y: auto; }
+}
+@media (max-width: 760px) {
+  .casebook-layout { grid-template-columns: 1fr; }
+  .case-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); max-height: 250px; }
+  .casebook-section, .casebook-top { padding: 20px; }
+  .casebook-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .casebook-filters > .field:first-child { grid-column: 1 / -1; }
+  .casebook-storage { flex-direction: column; align-items: start; }
+  .casebook-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .casebook-metrics > div:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  .casebook-metrics > div:nth-child(2) { border-right: 0; }
+  .casebook-flow { grid-template-columns: 1fr; }
+  .repo-local-action { flex-direction: column; align-items: start; }
+  .release-finding { flex-wrap: wrap; }
+}
+@media (max-width: 440px) {
+  .casebook-form-grid, .case-list { grid-template-columns: 1fr; }
+  .casebook-section-head { align-items: start; flex-direction: column; }
+  .casebook-subnav button { flex: 1 0 40%; }
+}
+.casebook input.sr-only { width: 1px; height: 1px; min-width: 0; }
+.workspace-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+html { scroll-padding-top: 150px; }
+.casebook-top, .casebook-section { scroll-margin-top: 150px; }
+.release-verdict.pending { border-color: #ac9455; background: rgba(233,193,108,.04); }
+@media (max-width: 560px) {
+  .workspace-tabs { grid-template-columns: repeat(5, minmax(74px, 1fr)); }
+  html { scroll-padding-top: 130px; }
+  .casebook-top, .casebook-section { scroll-margin-top: 130px; }
+}
+.dependency-inventory { max-height: 300px; overflow-y: auto; margin: 12px 0 20px; border: 1px solid var(--line); border-radius: 12px; }
+.dependency-inventory .scope-file { grid-template-columns: 18px minmax(0, 1fr) auto; }
+.dependency-inventory small { font-size: 10px; color: var(--muted); }
+.dependency-results { padding-top: 28px; }
+.dependency-results a { color: var(--accent); }
+.dependency-results p { overflow-wrap: anywhere; }
+@media (max-width: 560px) { .dependency-inventory .scope-file { grid-template-columns: 18px minmax(0, 1fr); } .dependency-inventory small { grid-column: 2; } }
+.ul-discrete-tab { flex-shrink: 0; }

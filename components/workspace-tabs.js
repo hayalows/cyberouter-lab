@@ -6,6 +6,7 @@ const ITEMS = [
   { id: "repositories", label: "Repositories", hint: "Source" },
   { id: "website", label: "Website", hint: "Live" },
   { id: "playground", label: "Playground", hint: "Prompt" },
+  { id: "casebook", label: "Casebook", hint: "Act & verify" },
   { id: "connection", label: "Connection", hint: "Setup" },
 ];
 

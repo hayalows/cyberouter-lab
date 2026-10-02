@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import useMeasure from "react-use-measure";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -25,6 +25,7 @@ function Tool({ icon, label, onClick, danger = false, blurred = false }) {
 }
 
 export default function UseLayoutsDynamicToolbar({ onCopy, onDownload, onClear, onCopyMcp }) {
+  const toolbarRef = useRef(null);
   const [expanded, setExpanded] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [primaryRef, primaryBounds] = useMeasure();
@@ -32,6 +33,10 @@ export default function UseLayoutsDynamicToolbar({ onCopy, onDownload, onClear, 
   const reduceMotion = useReducedMotion();
 
   useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    if (!mounted) return;
+    toolbarRef.current?.querySelector(expanded ? ".secondary button" : ".ul-dynamic-toolbar-panel button")?.focus();
+  }, [expanded]);
 
   const hasMeasurements = primaryBounds.width > 0;
   const width = expanded ? secondaryBounds.width : primaryBounds.width;
@@ -42,6 +47,7 @@ export default function UseLayoutsDynamicToolbar({ onCopy, onDownload, onClear, 
 
   return (
     <motion.div
+      ref={toolbarRef}
       className="ul-dynamic-toolbar"
       initial={{ width: hasMeasurements ? primaryBounds.width : "auto" }}
       animate={hasMeasurements ? { width } : undefined}
@@ -53,7 +59,7 @@ export default function UseLayoutsDynamicToolbar({ onCopy, onDownload, onClear, 
         animate={{ x: expanded ? -primaryBounds.width : 0 }}
         transition={transition}
       >
-        <div ref={primaryRef} className="ul-dynamic-toolbar-panel">
+        <div ref={primaryRef} className="ul-dynamic-toolbar-panel" inert={expanded} aria-hidden={expanded}>
           <Tool icon={InboxIcon} label="Copy report" onClick={onCopy} blurred={expanded} />
           <Tool icon={Archive02Icon} label="Download report" onClick={onDownload} blurred={expanded} />
           <Tool icon={Message01Icon} label="Copy MCP endpoint" onClick={onCopyMcp} blurred={expanded} />
@@ -63,6 +69,8 @@ export default function UseLayoutsDynamicToolbar({ onCopy, onDownload, onClear, 
         </div>
         <div
           ref={secondaryRef}
+          inert={!expanded}
+          aria-hidden={!expanded}
           className="ul-dynamic-toolbar-panel secondary"
           style={{
             position: expanded ? "relative" : "absolute",

@@ -26,6 +26,7 @@ export default function UseLayoutsSmoothDropdown({ onNavigate, onCopyMcp, active
     { id: "repositories", label: "Repository review", icon: FolderIcon },
     { id: "website", label: "Website assessment", icon: File01Icon },
     { id: "playground", label: "Playground", icon: Message01Icon },
+    { id: "casebook", label: "Security casebook", icon: File01Icon },
     { id: "connection", label: "Connection", icon: SettingsIcon },
     { id: "divider" },
     { id: "mcp", label: "Copy MCP endpoint", icon: HelpCircleIcon },
