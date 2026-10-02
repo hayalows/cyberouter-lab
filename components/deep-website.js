@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from "react";
 
 function downloadable(text, filename) { const url = URL.createObjectURL(new Blob([text], { type: "application/json" })); const a = document.createElement("a"); a.href = url; a.download = filename; document.body.append(a); a.click(); a.remove(); URL.revokeObjectURL(url); }
 function canonical(input, root) { const url = new URL(input, root); const base = new URL(root); if (!["http:", "https:"].includes(url.protocol) || url.hostname.toLowerCase().replace(/^www\./, "") !== base.hostname.toLowerCase().replace(/^www\./, "") || url.port !== base.port || url.username || url.password) return null; url.hash = ""; url.search = ""; if (/\/(?:logout|signout|delete|remove|unsubscribe|reset|confirm|activate|cancel)(?:\/|$)/i.test(url.pathname)) return null; return url.toString(); }
-export default function DeepWebsite({ visible, target, token, authorized, connected, siteApi, onEvidence, onCapture }) {
+export default function DeepWebsite({ visible, target, token, authorized, connected, siteApi, onEvidence, onCapture, onActivity }) {
   const [budget, setBudget] = useState(30); const [seeds, setSeeds] = useState(""); const [job, setJob] = useState(null); const ref = useRef(null); const pause = useRef(false); const active = useRef(false); const [running, setRunning] = useState(false); const [error, setError] = useState(""); const [progress, setProgress] = useState("");
+  useEffect(() => { onActivity?.(running); return () => onActivity?.(false); }, [running, onActivity]);
   useEffect(() => { if (!connected || !authorized) pause.current = true; }, [connected, authorized]);
   function publish(j) { ref.current = j; setJob({ ...j }); }
   async function execute(j) {

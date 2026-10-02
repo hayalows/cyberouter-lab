@@ -7,9 +7,9 @@ A Vercel-hosted security workspace for Enclave Cyberouter.
 The interface defaults to **Simple** view, aimed at a person with no security
 background:
 
-- a Home screen with two large actions — **Check my website** and **Check my code**
-- a three-step first-run wizard (what this is, connect your key, choose a task)
-- website checks return a **0–100 score and a letter grade**, a one-sentence
+- a Home screen with two clear actions — **Review your code** and **Check your website**
+- an optional three-step setup guide (what this is, connect your key, choose a task)
+- website checks return an **observed-check score and a letter grade**, a one-sentence
   verdict, and a plain-language **"What to do next"** list
 - every deterministic finding is translated into what it means and what to do
 - **Explain simply** rewrites any technical report for a business owner
@@ -19,6 +19,16 @@ background:
 
 Switching modes is per-device and never loses your work. Expert view is the
 full workbench described below.
+
+## Unified workspace interface
+
+The workspace uses one desktop sidebar and a native mobile destination selector, a compact shared page header, and common color, typography, spacing, surface, and control rules. Simple / Expert changes the controls available inside a task, not the navigation. Navigation destinations have shareable URL fragments and support browser back/forward.
+
+Nonessential layout, blur, scale, and button animations have been removed from the active interface. Request indicators reserve their space and show only whether work is running; stopping a request is not treated as proof of success. Setup uses a native modal dialog with keyboard focus containment, optional entry, inline connection errors, and a clear Continue action.
+
+Advanced tools load on first use and then remain mounted to preserve jobs and unsaved evidence while navigating. Checkpoints and exports are still required before a refresh. Source/website security boundaries and model-key handling remain unchanged. Browser-storage and clipboard failures now provide recoverable feedback.
+
+Website grades describe the checked observations only. A critical finding caps the grade at F; a high finding caps it at C. A failed or zero-page check does not generate a reassuring score. Grades are not validated measurements of overall security or compliance.
 
 ## Current capabilities
 
@@ -146,18 +156,11 @@ MCP adds Cyberouter as a tool provider to Codex. It does not add third-party Cyb
 
 The workspace UI follows the Product Design OS in `hayalows/Skills`: task hierarchy comes before decoration, system status stays visible, advanced security modes use progressive disclosure, feedback is placed next to the action that triggered it, and responsive/accessibility states are treated as part of the component.
 
-Interaction references from useLayouts were adapted rather than dropped in unchanged:
-- Discrete Tabs → the animated workspace switcher
-- Status Button → scan/connect loading feedback that changes in place
-- Bento Card → the compact workspace-status overview
-- Dynamic Toolbar → sticky contextual navigation and report controls
-
-Motion is used for feedback and orientation, with a reduced-motion fallback.
-
+The interface follows Product Design OS: shared spacing and typography, predictable native controls, visible system status, restrained request indicators, explicit coverage, and progressive disclosure of advanced work. Navigation and report actions keep fixed geometry; feedback does not move buttons or resize the page shell.
 
 ## useLayouts components
 
-Five useLayouts components were incorporated into the production interface: Discrete Tabs, Dynamic Toolbar, Smooth Dropdown, Bento Card, and Save Button. The upstream source snapshots are preserved under `third_party/uselayouts/upstream/` with the original MIT license. Production adapters live under `components/uselayouts/` and keep the original interaction patterns while mapping them to Cyberouter Lab's existing state and dark security-workbench visual system.
+Earlier versions incorporated five useLayouts components. This overhaul retains adapted Discrete Tabs, Dynamic Toolbar, and request-button patterns with stable geometry and visible labels. The preview Bento Card and expanding Smooth Dropdown were retired to remove duplicated navigation and decorative motion. Upstream snapshots and the MIT license remain under `third_party/uselayouts/`; no external component service is required at runtime.
 
 ## Security casebook
 

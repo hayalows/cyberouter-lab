@@ -2,21 +2,22 @@
 
 import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
+import dynamic from "next/dynamic";
 import remarkGfm from "remark-gfm";
-import UseLayoutsDiscreteTabs from "@/components/uselayouts/discrete-tabs";
+import WorkspaceShell, { useWorkspaceNavigation } from "@/components/workspace-shell";
 import UseLayoutsStatusButton from "@/components/uselayouts/status-button";
-import UseLayoutsBentoCard from "@/components/uselayouts/bento-card";
-import UseLayoutsSmoothDropdown from "@/components/uselayouts/smooth-dropdown";
 import UseLayoutsDynamicToolbar from "@/components/uselayouts/dynamic-toolbar";
-import FullAudit from "@/components/full-audit";
-import ResearchDesk from "@/components/research-desk";
-import DeepWebsite from "@/components/deep-website";
-import SecurityWorkbench from "@/components/security-workbench";
 import OnboardingWizard from "@/components/onboarding-wizard";
 import { SimpleHome, ScoreCard } from "@/components/simple-home";
 import { createCase, parseModelFindings, scanLocalRules } from "@/lib/security-casebook";
 import { detectSensitiveSignals, redactSensitiveText } from "@/lib/sensitive-content";
 import { assessmentScore, nextSteps, plainFinding, GRADE_LABEL, PLAIN_REPORT_SYSTEM_PROMPT } from "@/lib/plain-language";
+
+const ToolLoading = () => <div className="panel tool-loading" role="status">Opening workspace tools…</div>;
+const FullAudit = dynamic(() => import("@/components/full-audit"), { loading: ToolLoading });
+const ResearchDesk = dynamic(() => import("@/components/research-desk"), { loading: ToolLoading });
+const DeepWebsite = dynamic(() => import("@/components/deep-website"), { loading: ToolLoading });
+const SecurityWorkbench = dynamic(() => import("@/components/security-workbench"), { loading: ToolLoading });
 
 const MODES = {
   ask: {
@@ -42,37 +43,37 @@ const MODES = {
 const SURFACE_COPY = {
   home: {
     eyebrow: "START HERE",
-    title: "Check your website and code for security problems.",
-    description: "Run a safe, read-only check in plain language. No security background needed — we explain what we found and what to do next.",
+    title: "Your security workspace",
+    description: "Review code, check websites, and turn evidence into a clear next step.",
   },
   research: {
     eyebrow: "CONNECTED INVESTIGATIONS",
-    title: "Connect evidence. Challenge assumptions.",
+    title: "Investigate",
     description: "Bring together related repositories, vulnerability intelligence and observed website behavior to investigate what isolated scans can miss.",
   },
   casebook: {
     eyebrow: "SECURITY OPERATIONS",
-    title: "Turn evidence into decisions.",
+    title: "Findings & evidence",
     description: "Prioritize findings, assign remediation, compare assessments and record the checks behind a release decision.",
   },
   repositories: {
     eyebrow: "SOURCE SECURITY",
-    title: "Review a codebase with evidence.",
+    title: "Code review",
     description: "Map a GitHub repository, focus coverage on high-risk paths, and get a report you can verify and share.",
   },
   website: {
     eyebrow: "WEB SECURITY",
-    title: "Check the public attack surface.",
-    description: "Start with read-only checks, then prove domain control before the bounded active probes.",
+    title: "Website checks",
+    description: "Check public pages safely. Verify domain ownership to expand the review.",
   },
   playground: {
     eyebrow: "MODEL WORKSPACE",
-    title: "Ask, review, or pressure-test a finding.",
+    title: "Model playground",
     description: "Give the selected model a focused task, relevant context, and evidence it can actually inspect.",
   },
   connection: {
     eyebrow: "WORKSPACE SETUP",
-    title: "Connect the tools you trust.",
+    title: "Connections",
     description: "Your Cyberouter key is held in this browser and sent through this app when you make a request. Common credential patterns are redacted before model review.",
   },
 };
@@ -205,7 +206,10 @@ function credentialRedactionNote(count) {
 const KEY_HELP_URL = "https://router.enclave.ai";
 
 export default function Home() {
-  const [surface, setSurface] = useState("home");
+  const [surface, setSurface] = useWorkspaceNavigation();
+  const [deepRunning, setDeepRunning] = useState(false);
+  const [crawlRunning, setCrawlRunning] = useState(false);
+  const [openedTools, setOpenedTools] = useState([]);
   const [viewMode, setViewMode] = useState("simple");
   const [showWizard, setShowWizard] = useState(false);
   const [wizardStep, setWizardStep] = useState(0);
@@ -260,6 +264,7 @@ export default function Home() {
   const [correlateRepo, setCorrelateRepo] = useState(false);
 
   useEffect(() => {
+    try {
     const persistent = localStorage.getItem("cyberouter_key");
     const session = sessionStorage.getItem("cyberouter_key");
     const found = persistent || session || "";
@@ -271,12 +276,15 @@ export default function Home() {
     if (gh) setGithubToken(gh);
     const savedMode = localStorage.getItem("cyberouter_view_mode");
     if (savedMode === "expert" || savedMode === "simple") setViewMode(savedMode);
-    const seen = localStorage.getItem("cyberouter_onboarded");
-    if (seen !== "1") setShowWizard(true);
+    } catch { setStatus("Browser storage unavailable · key stays in this tab"); }
+    // Setup is optional and available from Home; do not interrupt first use.
   }, []);
+
+  useEffect(() => { setError(""); }, [surface]);
 
   function changeViewMode(next) {
     setViewMode(next);
+    if (next === "simple") { setScanKind("quick"); setSiteMode("passive"); }
     try { localStorage.setItem("cyberouter_view_mode", next); } catch {}
   }
 
@@ -285,10 +293,15 @@ export default function Home() {
     try { localStorage.setItem("cyberouter_onboarded", "1"); } catch {}
   }
 
+  useEffect(() => {
+    const requested = [surface === "research" && "research", surface === "casebook" && "casebook", surface === "repositories" && scanKind === "deep" && viewMode === "expert" && "deep", surface === "website" && viewMode === "expert" && "crawl"].filter(Boolean);
+    setOpenedTools(previous => requested.every(tool => previous.includes(tool)) ? previous : [...new Set([...previous, ...requested])]);
+  }, [surface, scanKind, viewMode]);
+
   const currentMode = MODES[mode];
   const severityCounts = useMemo(() => reportSeverityCounts(result), [result]);
   const siteReport = useMemo(() => {
-    if (!siteScan?.summary) return null;
+    if (!siteScan?.summary || !siteScan.summary.pagesScanned) return null;
     return { ...assessmentScore(siteScan.summary), findings: (siteScan.findings || []).map(plainFinding), steps: nextSteps(siteScan.findings || []) };
   }, [siteScan]);
   const latestScan = sessionHistory[0] || null;
@@ -351,12 +364,17 @@ export default function Home() {
       if (!list.length) throw new Error("The key worked, but Cyberouter returned no model IDs.");
       setModels(list);
       setModel((previous) => (list.includes(previous) ? previous : list[0]));
+      try {
       if (remember) {
         localStorage.setItem("cyberouter_key", apiKey.trim());
         sessionStorage.removeItem("cyberouter_key");
       } else {
         sessionStorage.setItem("cyberouter_key", apiKey.trim());
         localStorage.removeItem("cyberouter_key");
+      }
+      } catch {
+        setRemember(false);
+        setError("Model connected, but browser storage is unavailable. The key stays in memory for this tab; reconnect after a refresh.");
       }
       setConnected(true);
       setStatus(`Connected · ${list.length} model${list.length === 1 ? "" : "s"}`);
@@ -905,9 +923,11 @@ export default function Home() {
 
   async function copyReport() {
     if (!result) return;
-    await navigator.clipboard.writeText(result);
+    try {
+      await navigator.clipboard.writeText(result);
     setCopiedReport(true);
     setTimeout(() => setCopiedReport(false), 1600);
+    } catch { setError("Copy was blocked by your browser. Select the text to copy it manually, or download the report if available."); }
   }
 
   function downloadReport() {
@@ -953,77 +973,35 @@ export default function Home() {
   }
 
   async function copyMcp() {
-    await navigator.clipboard.writeText(`${window.location.origin}/api/mcp`);
+    try {
+      await navigator.clipboard.writeText(`${window.location.origin}/api/mcp`);
     setCopiedMcp(true);
     setTimeout(() => setCopiedMcp(false), 1600);
+    } catch { setError("Copy was blocked by your browser. Select the text to copy it manually, or download the report if available."); }
   }
 
   async function copyCodexConfig() {
     const config = `[mcp_servers.cyberouter]\nurl = "${window.location.origin}/api/mcp"\nbearer_token_env_var = "CYBEROUTER_API_KEY"`;
-    await navigator.clipboard.writeText(config);
+    try {
+      await navigator.clipboard.writeText(config);
     setCopiedConfig(true);
     setTimeout(() => setCopiedConfig(false), 1600);
+    } catch { setError("Copy was blocked by your browser. Select the text to copy it manually, or download the report if available."); }
   }
 
   return (
-    <main className="shell">
-      <header className="topbar">
-        <div className="brand">
-          <div className="mark">C</div>
-          <div>
-            <div className="brand-title">Cyberouter Lab</div>
-            <div className="brand-sub">Security workbench</div>
-          </div>
-        </div>
-        <div className="topbar-actions">
-          <div className="view-toggle" role="group" aria-label="Interface detail level">
-            <button type="button" className={viewMode === "simple" ? "active" : ""} aria-pressed={viewMode === "simple"} onClick={() => changeViewMode("simple")}>Simple</button>
-            <button type="button" className={viewMode === "expert" ? "active" : ""} aria-pressed={viewMode === "expert"} onClick={() => changeViewMode("expert")}>Expert</button>
-          </div>
-          <UseLayoutsSmoothDropdown
-            activeSurface={surface}
-            onNavigate={setSurface}
-            onCopyMcp={copyMcp}
-          />
-          <button type="button" className={`status-pill ${connected ? "ok" : ""}`} aria-live="polite" onClick={() => setSurface("connection")} aria-label={`${status}. Open connection settings`}>
-            <span className="status-dot" />{status}<span className="status-action-hint">Manage</span>
-          </button>
-        </div>
-      </header>
-
-      <section className="workspace-intro">
+    <WorkspaceShell surface={surface} onNavigate={setSurface} viewMode={viewMode} onViewMode={changeViewMode} connected={connected} status={status} backgroundTask={deepRunning ? "Deep audit running" : crawlRunning ? "Website crawl running" : repoBusy ? "Code review running" : siteBusy ? "Website check running" : busy ? "Model request running" : ""} onOpenTask={() => { if (deepRunning || crawlRunning) changeViewMode("expert"); if (deepRunning) { setScanKind("deep"); setSurface("repositories"); } else if (crawlRunning || siteBusy) setSurface("website"); else if (repoBusy) setSurface("repositories"); else setSurface("playground"); }}>
+      <section className="workspace-intro" aria-labelledby="page-title">
         <div className="workspace-intro-copy">
           <div className="eyebrow">{surfaceCopy.eyebrow}</div>
-          <h1>{surfaceCopy.title}</h1>
+          <h1 id="page-title" tabIndex={-1}>{surfaceCopy.title}</h1>
           <p>{surfaceCopy.description}</p>
         </div>
-        <div className="workspace-intro-note">
-          <span className="card-kicker">{surface === "casebook" ? "YOUR EVIDENCE WORKFLOW" : connected ? "READY TO CHECK" : "ONE QUICK STEP"}</span>
-          <strong>{surface === "casebook" ? "Review. Assign. Verify." : connected ? "Your key is connected" : "Connect your key"}</strong>
-          <p>{surface === "casebook" ? "Local code checks, finding triage, threat models and exports work without a model key." : connected ? "Everything is ready. Pick a check below." : "Checks use your own Cyberouter key, kept in this browser and used only for your requests."}</p>
-          {!connected && surface !== "casebook" && <button type="button" className="text-button" onClick={() => setSurface("connection")}>Connect my key <span aria-hidden="true">↗</span></button>}
-        </div>
       </section>
+      {surface === "home" && <SimpleHome connected={connected} onChoose={setSurface} onConnect={() => setSurface("connection")} onSetup={() => { setWizardStep(0); setShowWizard(true); }} />}
 
-      {viewMode === "simple" && surface !== "home" && (
-        <button type="button" className="back-home" onClick={() => setSurface("home")}><span aria-hidden="true">←</span> Back to start</button>
-      )}
-
-      {viewMode === "simple" && surface === "home" && (
-        <SimpleHome connected={connected} onChoose={setSurface} onConnect={() => setSurface("connection")} />
-      )}
-
-      {viewMode === "expert" && !["casebook", "research", "home"].includes(surface) && <UseLayoutsBentoCard
-        connected={connected}
-        model={model}
-        repoName={repoData?.repository?.fullName || ""}
-        siteTarget={siteTarget}
-        onNavigate={setSurface}
-      />}
-
-      {viewMode === "expert" && <UseLayoutsDiscreteTabs value={surface} onChange={setSurface} />}
-      <ResearchDesk visible={surface === "research"} githubApi={githubApi} modelCall={modelCall} connected={connected} report={result} reportMeta={reportMeta} website={siteScan} onEvidence={setIntelligence} onOpenRepository={(name) => { setRepoInput(name); setRepoRef(""); setSurface("repositories"); }} onCapture={openCase} />
-      <SecurityWorkbench visible={surface === "casebook"} incoming={incomingCase} onNavigate={setSurface} />
+      {(surface === "research" || openedTools.includes("research")) && <div className="tool-slot" hidden={!(surface === "research")}><ResearchDesk visible={surface === "research"} githubApi={githubApi} modelCall={modelCall} connected={connected} report={result} reportMeta={reportMeta} website={siteScan} onEvidence={setIntelligence} onOpenRepository={(name) => { setRepoInput(name); setRepoRef(""); setSurface("repositories"); }} onCapture={openCase} /></div>}
+      {(surface === "casebook" || openedTools.includes("casebook")) && <div className="tool-slot" hidden={!(surface === "casebook")}><SecurityWorkbench visible={surface === "casebook"} incoming={incomingCase} onNavigate={setSurface} /></div>}
 
       <OnboardingWizard
         open={showWizard}
@@ -1035,13 +1013,14 @@ export default function Home() {
         remember={remember}
         onRemember={setRemember}
         onConnect={connect}
+        error={error}
         busy={busy}
         connected={connected}
         keyUrl={KEY_HELP_URL}
         onChoose={(target) => { finishWizard(); setSurface(target); }}
       />
 
-      {error && <div className="error-box global-error" role="alert"><span>{error}</span><button type="button" className="error-dismiss" onClick={() => setError("")}>Dismiss</button></div>}
+      {error && !showWizard && <div className="error-box global-error" role="alert"><span>{error}</span><button type="button" className="error-dismiss" onClick={() => setError("")}>Dismiss</button></div>}
 
       {surface === "connection" && (
         <section className="grid connection-grid">
@@ -1057,6 +1036,8 @@ export default function Home() {
               onClick={connect}
             />
             <div className="privacy-note"><span>Key handling</span><p>The key is stored in this browser only and sent through this app to the fixed Cyberouter API when you run a request.</p></div>
+            {connected && <label className="field"><span>Review model</span><select value={model} onChange={e => setModel(e.target.value)}>{models.map(item => <option key={item} value={item}>{item}</option>)}</select></label>}
+            {connected && <details className="model-catalog"><summary>{models.length} models available</summary><div className="model-cloud">{models.slice(0, 50).map(item => <span key={item}>{item}</span>)}</div>{models.length > 50 && <p>First 50 shown here. The model selector includes the complete catalogue.</p>}</details>}
           </aside>
 
           <section className="panel work-panel">
@@ -1064,12 +1045,11 @@ export default function Home() {
             <label className="field"><span>Fine-grained GitHub token <em>optional</em></span><input type="password" autoComplete="new-password" value={githubToken} placeholder="Only needed for private repos" onChange={(e) => setGithubToken(e.target.value)} /></label>
             <div className="privacy-note"><span>Before a model review</span><p>Selected code, diffs, or web evidence go to the Cyberouter model you choose. Common credential formats are redacted locally first; this heuristic cannot catch every secret. GitHub access is read-only.</p></div>
             <div className="privacy-note"><span>Recommended GitHub permission</span><p>Use a fine-grained token scoped to the repositories you want to scan, with Contents: Read and Pull requests: Read. It stays in sessionStorage for this browser session.</p></div>
-            {connected && <div className="model-cloud">{models.map((item) => <span key={item}>{item}</span>)}</div>}
             <div className="codex-box">
               <span className="scan-label">CODEX MCP</span>
               <strong>Use Cyberouter beside Codex</strong>
               <p>Codex keeps its OpenAI model as the main agent and can call these Cyberouter models through the MCP tools. They do not become entries in Codex's native model picker.</p>
-              <button type="button" className="ghost" onClick={copyCodexConfig}>{copiedConfig ? "Codex config copied" : "Copy Codex config"}</button>
+              <div className="casebook-actions"><button type="button" className="ghost" onClick={copyCodexConfig}>{copiedConfig ? "Codex config copied" : "Copy Codex config"}</button><button type="button" className="ghost" onClick={copyMcp}>{copiedMcp ? "Endpoint copied" : "Copy MCP endpoint"}</button></div>
             </div>
           </section>
         </section>
@@ -1259,7 +1239,7 @@ export default function Home() {
             {!repoData ? (
               <div className="repo-empty">
                 <div className="empty-mark">⌁</div>
-                <h3>{viewMode === "simple" ? "Enter a GitHub project above to begin." : "Load a repository to map its attack surface."}</h3>
+                <h3>{viewMode === "simple" ? "Enter a GitHub project to begin." : "Load a repository to map its attack surface."}</h3>
                 <p>{viewMode === "simple" ? "Use the format owner/repo — for example vercel/next.js. We read it safely and never change anything." : "The first pass reads the GitHub tree only. Source files are fetched when you start a scan."}</p>
               </div>
             ) : (
@@ -1354,9 +1334,9 @@ export default function Home() {
         </section>
       )}
 
-      <FullAudit visible={surface === "repositories" && scanKind === "deep"} repositoryData={repoData} connected={connected} model={model} githubApi={githubApi} modelCall={modelCall} intelligence={intelligence} onCapture={openCase} onReport={({ text, meta }) => { setResult(text); setReportMeta(meta); setResultSource("repo"); setResultNotice(meta.scope); setUsage(null); }} />
-      <DeepWebsite visible={surface === "website"} target={siteTarget} token={siteToken} authorized={siteAuthorized} connected={connected} siteApi={siteApi} onEvidence={setSiteScan} onCapture={openCase} />
-      <section className="panel output-panel" hidden={["casebook", "research", "home"].includes(surface)} aria-labelledby="report-heading">
+      {((surface === "repositories" && scanKind === "deep" && viewMode === "expert") || openedTools.includes("deep")) && <div className="tool-slot" hidden={!(surface === "repositories" && scanKind === "deep" && viewMode === "expert")}><FullAudit onActivity={setDeepRunning} visible={surface === "repositories" && scanKind === "deep" && viewMode === "expert"} repositoryData={repoData} connected={connected} model={model} githubApi={githubApi} modelCall={modelCall} intelligence={intelligence} onCapture={openCase} onReport={({ text, meta }) => { setResult(text); setReportMeta(meta); setResultSource("repo"); setResultNotice(meta.scope); setUsage(null); }} /></div>}
+      {((surface === "website" && viewMode === "expert") || openedTools.includes("crawl")) && <div className="tool-slot" hidden={!(surface === "website" && viewMode === "expert")}><DeepWebsite onActivity={setCrawlRunning} visible={surface === "website" && viewMode === "expert"} target={siteTarget} token={siteToken} authorized={siteAuthorized} connected={connected} siteApi={siteApi} onEvidence={setSiteScan} onCapture={openCase} /></div>}
+      <section className="panel output-panel" hidden={["casebook", "research", "home", "connection"].includes(surface) || (!result && !busy && !repoBusy && !siteBusy)} aria-labelledby="report-heading">
         <div className="panel-head">
           <div><span className="step">REPORT</span><h2 id="report-heading">{reportTitle}</h2></div>
           {usage && <div className="usage">{usage.prompt_tokens != null && <span>In {usage.prompt_tokens.toLocaleString()}</span>}{usage.completion_tokens != null && <span>Out {usage.completion_tokens.toLocaleString()}</span>}{usage.total_tokens != null && <span>Total {usage.total_tokens.toLocaleString()}</span>}</div>}
@@ -1378,6 +1358,8 @@ export default function Home() {
                 {reportMeta && <button type="button" className="ghost" disabled={captureBusy || repoBusy || siteBusy || busy} onClick={() => captureReport(false)}>{reportMeta.observations ? "Capture web observations" : "Save report as case"}</button>}
               <UseLayoutsDynamicToolbar
                 onCopy={copyReport}
+                copiedReport={copiedReport}
+                copiedMcp={copiedMcp}
                 onDownload={downloadReport}
                 onClear={clearReport}
                 onCopyMcp={copyMcp}
@@ -1409,6 +1391,6 @@ export default function Home() {
       </section>
 
       <footer><span>Cyberouter Lab</span><span>Read-only GitHub access · model requests use router.enclave.ai/v1</span></footer>
-    </main>
+    </WorkspaceShell>
   );
 }

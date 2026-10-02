@@ -14,11 +14,12 @@ function groupNotes(parts, budget = 42000) {
   }
   if (current) groups.push(current); return groups;
 }
-export default function FullAudit({ visible, repositoryData, connected, model, githubApi, modelCall, onReport, onCapture, intelligence }) {
+export default function FullAudit({ visible, repositoryData, connected, model, githubApi, modelCall, onReport, onCapture, intelligence, onActivity }) {
   const [job, setJob] = useState(null); const jobRef = useRef(null);
   const [running, setRunning] = useState(false); const runningRef = useRef(false); const pauseRef = useRef(false);
   const [error, setError] = useState(""); const [progress, setProgress] = useState(""); const [filter, setFilter] = useState(""); const [page, setPage] = useState(0); const importRef = useRef(null);
   const [acknowledged, setAcknowledged] = useState(false);
+  useEffect(() => { onActivity?.(running); return () => onActivity?.(false); }, [running, onActivity]);
   const metrics = job ? coverage(job) : null;
   const factsCount = job?.files.filter(f => f.facts).length || 0;
   const graph = useMemo(() => job ? importGraph(job.files) : { edges: [], unresolved: [] }, [job?.id, factsCount]);
