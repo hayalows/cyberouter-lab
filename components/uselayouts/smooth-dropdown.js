@@ -23,6 +23,7 @@ export default function UseLayoutsSmoothDropdown({ onNavigate, onCopyMcp, active
   const reduceMotion = useReducedMotion();
 
   const items = [
+    { id: "home", label: "Home", icon: FolderIcon },
     { id: "repositories", label: "Repository review", icon: FolderIcon },
     { id: "website", label: "Website assessment", icon: File01Icon },
     { id: "playground", label: "Playground", icon: Message01Icon },

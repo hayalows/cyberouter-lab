@@ -10,7 +10,7 @@ export async function GET(request) {
     {
       resource,
       resource_name: "Cyberouter Lab MCP",
-      scopes_supported: ["cyberouter:use"],
+      scopes_supported: ["cyberouter:models", "cyberouter:chat", "cyberouter:web-audit"],
       bearer_methods_supported: ["header"],
       resource_documentation: `${url.protocol}//${url.host}/`,
     },

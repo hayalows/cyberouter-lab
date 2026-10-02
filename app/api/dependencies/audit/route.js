@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { MAX_PACKAGES, validPackage } from "@/lib/dependency-audit";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,6 +38,8 @@ async function audit(packages) {
   } finally { clearTimeout(timeout); }
 }
 export async function POST(request) {
+  const limited = rateLimit(request, { name: "deps-post", limit: 10, windowMs: 60_000 });
+  if (!limited.ok) return rateLimitResponse(limited.retryAfterSeconds);
   const body = await request.text();
   if (body.length > 160_000) return response({ error: "Inventory request is too large." }, 413);
   let data; try { data = JSON.parse(body); } catch { return response({ error: "Use a valid JSON inventory." }, 400); }
@@ -44,6 +47,8 @@ export async function POST(request) {
 }
 // A single-package read path permits public inspection without uploading a lockfile.
 export async function GET(request) {
+  const limited = rateLimit(request, { name: "deps-get", limit: 30, windowMs: 60_000 });
+  if (!limited.ok) return rateLimitResponse(limited.retryAfterSeconds);
   const query = new URL(request.url).searchParams;
   return audit([{ name: query.get("name"), version: query.get("version") }]);
 }

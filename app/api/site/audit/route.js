@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
 import { auditPublicSite } from "@/lib/site-audit";
 import { cyberouterFetch, errorMessage, keyFromRequest } from "@/lib/cyberouter";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(request) {
+  const limited = rateLimit(request, { name: "site-audit", limit: 8, windowMs: 60_000 });
+  if (!limited.ok) return rateLimitResponse(limited.retryAfterSeconds);
+
   const key = keyFromRequest(request);
 
   const auth = await cyberouterFetch("/models", { key });

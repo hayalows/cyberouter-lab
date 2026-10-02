@@ -6,6 +6,7 @@ import {
   githubTokenFromRequest,
   isReviewablePath,
 } from "@/lib/github";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -38,6 +39,9 @@ async function readFile({ owner, repo, ref, path, token }) {
 }
 
 export async function POST(request) {
+  const limited = rateLimit(request, { name: "gh-files", limit: 20, windowMs: 60_000 });
+  if (!limited.ok) return rateLimitResponse(limited.retryAfterSeconds);
+
   const token = githubTokenFromRequest(request);
   let payload;
   try {

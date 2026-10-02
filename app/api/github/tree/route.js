@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { githubJson, githubError, githubTokenFromRequest } from "@/lib/github";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export async function GET(request) {
+  const limited = rateLimit(request, { name: "gh-tree", limit: 60, windowMs: 60_000 });
+  if (!limited.ok) return rateLimitResponse(limited.retryAfterSeconds);
   const q = new URL(request.url).searchParams; const owner = q.get("owner"), repo = q.get("repo"), sha = q.get("sha");
   const json = (data, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
   if (!/^[A-Za-z0-9_.-]+$/.test(owner || "") || !/^[A-Za-z0-9_.-]+$/.test(repo || "") || !/^[a-f0-9]{40}$/.test(sha || "")) return json({ error: "Supply a repository and immutable tree SHA." }, 400);

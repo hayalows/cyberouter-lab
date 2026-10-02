@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { githubJson, githubError, githubTokenFromRequest } from "@/lib/github";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -13,6 +14,8 @@ async function publicJSON(url, byteLimit = 8_000_000) {
   return JSON.parse(new TextDecoder().decode(all));
 }
 export async function GET(request) {
+  const limited = rateLimit(request, { name: "intel", limit: 12, windowMs: 60_000 });
+  if (!limited.ok) return rateLimitResponse(limited.retryAfterSeconds);
   const q = new URL(request.url).searchParams; const kind = q.get("kind");
   const json = (data, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
   if (kind === "repo") {

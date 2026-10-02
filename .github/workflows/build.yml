@@ -20,6 +20,8 @@ jobs:
         with:
           node-version: 20
       - name: Install
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Build
         run: npm run build
+      - name: End-to-end smoke test
+        run: npm run test:e2e

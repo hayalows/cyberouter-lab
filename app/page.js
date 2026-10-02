@@ -12,8 +12,11 @@ import FullAudit from "@/components/full-audit";
 import ResearchDesk from "@/components/research-desk";
 import DeepWebsite from "@/components/deep-website";
 import SecurityWorkbench from "@/components/security-workbench";
+import OnboardingWizard from "@/components/onboarding-wizard";
+import { SimpleHome, ScoreCard } from "@/components/simple-home";
 import { createCase, parseModelFindings, scanLocalRules } from "@/lib/security-casebook";
 import { detectSensitiveSignals, redactSensitiveText } from "@/lib/sensitive-content";
+import { assessmentScore, nextSteps, plainFinding, GRADE_LABEL, PLAIN_REPORT_SYSTEM_PROMPT } from "@/lib/plain-language";
 
 const MODES = {
   ask: {
@@ -37,6 +40,11 @@ const MODES = {
 };
 
 const SURFACE_COPY = {
+  home: {
+    eyebrow: "START HERE",
+    title: "Check your website and code for security problems.",
+    description: "Run a safe, read-only check in plain language. No security background needed — we explain what we found and what to do next.",
+  },
   research: {
     eyebrow: "CONNECTED INVESTIGATIONS",
     title: "Connect evidence. Challenge assumptions.",
@@ -194,8 +202,15 @@ function credentialRedactionNote(count) {
     : "No common credential patterns matched in the reviewed material.";
 }
 
+const KEY_HELP_URL = "https://router.enclave.ai";
+
 export default function Home() {
-  const [surface, setSurface] = useState("repositories");
+  const [surface, setSurface] = useState("home");
+  const [viewMode, setViewMode] = useState("simple");
+  const [showWizard, setShowWizard] = useState(false);
+  const [wizardStep, setWizardStep] = useState(0);
+  const [showTechnical, setShowTechnical] = useState(false);
+  const [explaining, setExplaining] = useState(false);
   const [apiKey, setApiKey] = useState("");
   const [remember, setRemember] = useState(false);
   const [connected, setConnected] = useState(false);
@@ -233,6 +248,7 @@ export default function Home() {
   const [sessionHistory, setSessionHistory] = useState([]);
   const [resultSource, setResultSource] = useState("none");
   const [resultNotice, setResultNotice] = useState("");
+  const [resultPlain, setResultPlain] = useState("");
 
   const [siteTarget, setSiteTarget] = useState("");
   const [siteMode, setSiteMode] = useState("passive");
@@ -253,10 +269,28 @@ export default function Home() {
     }
     const gh = sessionStorage.getItem("cyberouter_github_token");
     if (gh) setGithubToken(gh);
+    const savedMode = localStorage.getItem("cyberouter_view_mode");
+    if (savedMode === "expert" || savedMode === "simple") setViewMode(savedMode);
+    const seen = localStorage.getItem("cyberouter_onboarded");
+    if (seen !== "1") setShowWizard(true);
   }, []);
+
+  function changeViewMode(next) {
+    setViewMode(next);
+    try { localStorage.setItem("cyberouter_view_mode", next); } catch {}
+  }
+
+  function finishWizard() {
+    setShowWizard(false);
+    try { localStorage.setItem("cyberouter_onboarded", "1"); } catch {}
+  }
 
   const currentMode = MODES[mode];
   const severityCounts = useMemo(() => reportSeverityCounts(result), [result]);
+  const siteReport = useMemo(() => {
+    if (!siteScan?.summary) return null;
+    return { ...assessmentScore(siteScan.summary), findings: (siteScan.findings || []).map(plainFinding), steps: nextSteps(siteScan.findings || []) };
+  }, [siteScan]);
   const latestScan = sessionHistory[0] || null;
   const reportTitle = resultSource === "website"
     ? "Website assessment"
@@ -380,6 +414,7 @@ export default function Home() {
     setResult("");
     setResultNotice("");
     setResultSource("none");
+    setResultPlain("");
     setReportMeta(null);
     setUsage(null);
     try {
@@ -492,6 +527,7 @@ export default function Home() {
     setResult("");
     setResultNotice("");
     setResultSource("none");
+    setResultPlain("");
     setReportMeta(null);
     setUsage(null);
     setScanKind(kind);
@@ -586,6 +622,7 @@ export default function Home() {
     setResult("");
     setResultNotice("");
     setResultSource("none");
+    setResultPlain("");
     setReportMeta(null);
     setRepoProgress(`Loading PR #${number}…`);
     try {
@@ -726,6 +763,7 @@ export default function Home() {
     setResult("");
     setResultNotice("");
     setResultSource("none");
+    setResultPlain("");
     setReportMeta(null);
     setUsage(null);
     setSiteScan(null);
@@ -892,7 +930,26 @@ export default function Home() {
     setResult("");
     setResultNotice("");
     setResultSource("none");
+    setResultPlain("");
     setUsage(null);
+  }
+
+  async function explainReport() {
+    if (!result || !connected || !model || explaining) return;
+    setExplaining(true);
+    setError("");
+    try {
+      const response = await modelCall([
+        { role: "system", content: PLAIN_REPORT_SYSTEM_PROMPT },
+        { role: "user", content: `Rewrite this security report in plain language:\n\n${result.slice(0, 60000)}` },
+      ], 2600);
+      if (!response.text) throw new Error("The model did not return an explanation. Try again.");
+      setResultPlain(response.text);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setExplaining(false);
+    }
   }
 
   async function copyMcp() {
@@ -919,6 +976,10 @@ export default function Home() {
           </div>
         </div>
         <div className="topbar-actions">
+          <div className="view-toggle" role="group" aria-label="Interface detail level">
+            <button type="button" className={viewMode === "simple" ? "active" : ""} aria-pressed={viewMode === "simple"} onClick={() => changeViewMode("simple")}>Simple</button>
+            <button type="button" className={viewMode === "expert" ? "active" : ""} aria-pressed={viewMode === "expert"} onClick={() => changeViewMode("expert")}>Expert</button>
+          </div>
           <UseLayoutsSmoothDropdown
             activeSurface={surface}
             onNavigate={setSurface}
@@ -937,14 +998,22 @@ export default function Home() {
           <p>{surfaceCopy.description}</p>
         </div>
         <div className="workspace-intro-note">
-          <span className="card-kicker">{surface === "casebook" ? "YOUR EVIDENCE WORKFLOW" : "MODEL CONNECTION"}</span>
-          <strong>{surface === "casebook" ? "Review. Assign. Verify." : connected ? model || "Models ready" : "Connect to begin"}</strong>
-          <p>{surface === "casebook" ? "Local code checks, finding triage, threat models and exports work without a model key." : connected ? `${models.length} model${models.length === 1 ? "" : "s"} available · common credentials are redacted before review` : "Use your own Cyberouter key. It is stored in this browser and sent through this app to Cyberouter for requests."}</p>
-          {!connected && surface !== "casebook" && <button type="button" className="text-button" onClick={() => setSurface("connection")}>Set up connection <span aria-hidden="true">↗</span></button>}
+          <span className="card-kicker">{surface === "casebook" ? "YOUR EVIDENCE WORKFLOW" : connected ? "READY TO CHECK" : "ONE QUICK STEP"}</span>
+          <strong>{surface === "casebook" ? "Review. Assign. Verify." : connected ? "Your key is connected" : "Connect your key"}</strong>
+          <p>{surface === "casebook" ? "Local code checks, finding triage, threat models and exports work without a model key." : connected ? "Everything is ready. Pick a check below." : "Checks use your own Cyberouter key, kept in this browser and used only for your requests."}</p>
+          {!connected && surface !== "casebook" && <button type="button" className="text-button" onClick={() => setSurface("connection")}>Connect my key <span aria-hidden="true">↗</span></button>}
         </div>
       </section>
 
-      {!["casebook", "research"].includes(surface) && <UseLayoutsBentoCard
+      {viewMode === "simple" && surface !== "home" && (
+        <button type="button" className="back-home" onClick={() => setSurface("home")}><span aria-hidden="true">←</span> Back to start</button>
+      )}
+
+      {viewMode === "simple" && surface === "home" && (
+        <SimpleHome connected={connected} onChoose={setSurface} onConnect={() => setSurface("connection")} />
+      )}
+
+      {viewMode === "expert" && !["casebook", "research", "home"].includes(surface) && <UseLayoutsBentoCard
         connected={connected}
         model={model}
         repoName={repoData?.repository?.fullName || ""}
@@ -952,9 +1021,25 @@ export default function Home() {
         onNavigate={setSurface}
       />}
 
-      <UseLayoutsDiscreteTabs value={surface} onChange={setSurface} />
+      {viewMode === "expert" && <UseLayoutsDiscreteTabs value={surface} onChange={setSurface} />}
       <ResearchDesk visible={surface === "research"} githubApi={githubApi} modelCall={modelCall} connected={connected} report={result} reportMeta={reportMeta} website={siteScan} onEvidence={setIntelligence} onOpenRepository={(name) => { setRepoInput(name); setRepoRef(""); setSurface("repositories"); }} onCapture={openCase} />
       <SecurityWorkbench visible={surface === "casebook"} incoming={incomingCase} onNavigate={setSurface} />
+
+      <OnboardingWizard
+        open={showWizard}
+        step={wizardStep}
+        onStep={setWizardStep}
+        onClose={finishWizard}
+        apiKey={apiKey}
+        onApiKey={setApiKey}
+        remember={remember}
+        onRemember={setRemember}
+        onConnect={connect}
+        busy={busy}
+        connected={connected}
+        keyUrl={KEY_HELP_URL}
+        onChoose={(target) => { finishWizard(); setSurface(target); }}
+      />
 
       {error && <div className="error-box global-error" role="alert"><span>{error}</span><button type="button" className="error-dismiss" onClick={() => setError("")}>Dismiss</button></div>}
 
@@ -993,16 +1078,16 @@ export default function Home() {
       {surface === "website" && (
         <section className="site-layout">
           <aside className="panel site-target-panel">
-            <div className="panel-head"><div><span className="step">01</span><h2>Target</h2></div></div>
+            <div className="panel-head"><div><span className="step">01</span><h2>{viewMode === "simple" ? "Your website" : "Target"}</h2></div></div>
             <label className="field">
-              <span>Website URL</span>
-              <input type="text" inputMode="url" autoComplete="url" value={siteTarget} placeholder="https://staging.example.com" onChange={(e) => { setSiteTarget(e.target.value); setSiteScan(null); }} />
+              <span>{viewMode === "simple" ? "Website address" : "Website URL"}</span>
+              <input type="text" inputMode="url" autoComplete="url" value={siteTarget} placeholder={viewMode === "simple" ? "yourwebsite.com" : "https://staging.example.com"} onChange={(e) => { setSiteTarget(e.target.value); setSiteScan(null); }} />
             </label>
             <div className="privacy-note">
-              <span>Hosted scanner boundary</span>
-              <p>Public HTTP/HTTPS only. Private IPs, localhost, internal hostnames, non-standard ports, cross-host redirects, form submission, credential attacks, and exploit payloads are blocked.</p>
+              <span>{viewMode === "simple" ? "What we do — and never do" : "Hosted scanner boundary"}</span>
+              <p>{viewMode === "simple" ? "We only read your public pages, like a visitor's browser would. We never guess passwords, submit forms, change anything, or touch private networks." : "Public HTTP/HTTPS only. Private IPs, localhost, internal hostnames, non-standard ports, cross-host redirects, form submission, credential attacks, and exploit payloads are blocked."}</p>
             </div>
-            {repoData && (
+            {repoData && viewMode === "expert" && (
               <label className="check-row">
                 <input type="checkbox" checked={correlateRepo} onChange={(e) => setCorrelateRepo(e.target.checked)} />
                 <span>Correlate with {repoData.repository.fullName}<small>Cyberouter can compare web observations with a small set of security-relevant source files from the repository you already loaded.</small></span>
@@ -1012,25 +1097,32 @@ export default function Home() {
 
           <section className="panel site-main">
             <div className="panel-head">
-              <div><span className="step">02</span><h2>Website assessment</h2></div>
-              <select className="model-select" aria-label="Cyberouter model" value={model} onChange={(e) => setModel(e.target.value)} disabled={!connected}>
+              <div><span className="step">02</span><h2>{viewMode === "simple" ? "Run the check" : "Website assessment"}</h2></div>
+              {viewMode === "expert" && <select className="model-select" aria-label="Cyberouter model" value={model} onChange={(e) => setModel(e.target.value)} disabled={!connected}>
                 {!connected && <option>Connect Cyberouter</option>}
                 {models.map((item) => <option value={item} key={item}>{item}</option>)}
-              </select>
+              </select>}
             </div>
 
-            <div className="scan-cards">
-              <button type="button" aria-pressed={siteMode === "passive"} className={`scan-card ${siteMode === "passive" ? "selected" : ""}`} onClick={() => setSiteMode("passive")}>
-                <span className="scan-label">PASSIVE ASSESSMENT</span>
-                <strong>Public attack-surface review</strong>
-                <p>GET-only crawl of up to 6 same-host pages, browser security headers, cookies, forms, mixed content, security.txt and robots.txt.</p>
-              </button>
-              <button type="button" aria-pressed={siteMode === "active"} className={`scan-card ${siteMode === "active" ? "selected" : ""}`} onClick={() => setSiteMode("active")}>
-                <span className="scan-label">VERIFIED ACTIVE</span>
-                <strong>Ownership-gated checks</strong>
-                <p>Requires a file challenge on the target. Adds bounded CORS and HTTP-method checks without submitting forms or sending exploit payloads.</p>
-              </button>
-            </div>
+            {viewMode === "expert" ? (
+              <div className="scan-cards">
+                <button type="button" aria-pressed={siteMode === "passive"} className={`scan-card ${siteMode === "passive" ? "selected" : ""}`} onClick={() => setSiteMode("passive")}>
+                  <span className="scan-label">PASSIVE ASSESSMENT</span>
+                  <strong>Public attack-surface review</strong>
+                  <p>GET-only crawl of up to 6 same-host pages, browser security headers, cookies, forms, mixed content, security.txt and robots.txt.</p>
+                </button>
+                <button type="button" aria-pressed={siteMode === "active"} className={`scan-card ${siteMode === "active" ? "selected" : ""}`} onClick={() => setSiteMode("active")}>
+                  <span className="scan-label">VERIFIED ACTIVE</span>
+                  <strong>Ownership-gated checks</strong>
+                  <p>Requires a file challenge on the target. Adds bounded CORS and HTTP-method checks without submitting forms or sending exploit payloads.</p>
+                </button>
+              </div>
+            ) : (
+              <div className="simple-repo-note">
+                <strong>We will check up to 6 pages and the login forms, cookies, and safety headers.</strong>
+                <span>Safe and read-only. You will get a score and a plain list of what to fix.</span>
+              </div>
+            )}
 
             {siteMode === "active" && (
               <div className="verification-card">
@@ -1064,11 +1156,11 @@ export default function Home() {
               <UseLayoutsStatusButton
                 busy={siteBusy}
                 disabled={siteBusy || !connected || !siteTarget.trim()}
-                idleLabel={siteMode === "active" ? "Run verified assessment" : "Run passive assessment"}
-                busyLabel={siteMode === "active" ? "Running verified checks…" : "Mapping website…"}
+                idleLabel={viewMode === "simple" ? "Check my website" : siteMode === "active" ? "Run verified assessment" : "Run passive assessment"}
+                busyLabel={siteMode === "active" ? "Running verified checks…" : "Checking your website…"}
                 onClick={auditWebsite}
               />
-              <div className="progress-copy" aria-live="polite">{siteProgress || (connected ? "Ready to assess" : "Connect Cyberouter first")}</div>
+              <div className="progress-copy" aria-live="polite">{siteProgress || (connected ? "Ready to check" : "Connect Cyberouter first")}</div>
             </div>
 
             {siteScan && (
@@ -1081,10 +1173,26 @@ export default function Home() {
               </div>
             )}
 
-            <div className="method-note">
-              <span className="scan-label">METHOD</span>
-              <p>Structured around OWASP WSTG web-testing categories and ASVS control areas. The hosted scan is deliberately bounded. Authenticated role abuse, business-logic abuse, exploit validation, and destructive testing belong in a disposable staging environment.</p>
-            </div>
+            {viewMode === "simple" && siteReport && (
+              <ScoreCard
+                report={siteReport}
+                onExplain={connected ? explainReport : null}
+                explaining={explaining}
+                onPrint={() => window.print()}
+                canCapture={Boolean(reportMeta)}
+                captureBusy={captureBusy}
+                onCapture={() => captureReport(false)}
+                includeTechnical={showTechnical}
+                onToggleTechnical={() => setShowTechnical((value) => !value)}
+              />
+            )}
+
+            {viewMode === "expert" && (
+              <div className="method-note">
+                <span className="scan-label">METHOD</span>
+                <p>Structured around OWASP WSTG web-testing categories and ASVS control areas. The hosted scan is deliberately bounded. Authenticated role abuse, business-logic abuse, exploit validation, and destructive testing belong in a disposable staging environment.</p>
+              </div>
+            )}
           </section>
         </section>
       )}
@@ -1141,52 +1249,61 @@ export default function Home() {
 
           <section className="panel repo-main">
             <div className="panel-head">
-              <div><span className="step">02</span><h2>Security scan</h2></div>
-              <select className="model-select" aria-label="Cyberouter model" value={model} onChange={(e) => setModel(e.target.value)} disabled={!connected}>
+              <div><span className="step">02</span><h2>{viewMode === "simple" ? "Check this code" : "Security scan"}</h2></div>
+              {viewMode === "expert" && <select className="model-select" aria-label="Cyberouter model" value={model} onChange={(e) => setModel(e.target.value)} disabled={!connected}>
                 {!connected && <option>Connect Cyberouter</option>}
                 {models.map((item) => <option value={item} key={item}>{item}</option>)}
-              </select>
+              </select>}
             </div>
 
             {!repoData ? (
               <div className="repo-empty">
                 <div className="empty-mark">⌁</div>
-                <h3>Load a repository to map its attack surface.</h3>
-                <p>The first pass reads the GitHub tree only. Source files are fetched when you start a scan.</p>
+                <h3>{viewMode === "simple" ? "Enter a GitHub project above to begin." : "Load a repository to map its attack surface."}</h3>
+                <p>{viewMode === "simple" ? "Use the format owner/repo — for example vercel/next.js. We read it safely and never change anything." : "The first pass reads the GitHub tree only. Source files are fetched when you start a scan."}</p>
               </div>
             ) : (
               <>
-                <div className="scan-cards">
-                <button type="button" aria-pressed={scanKind === "quick"} className={`scan-card ${scanKind === "quick" ? "selected" : ""}`} onClick={() => setScanKind("quick")}>
-                    <span className="scan-label">QUICK SCAN</span>
-                    <strong>Focused security pass</strong>
-                    <p>Reviews up to 18 high-signal files. Good before deployment or after a small feature.</p>
-                  </button>
-                <button type="button" aria-pressed={scanKind === "deep"} className={`scan-card ${scanKind === "deep" ? "selected" : ""}`} onClick={() => setScanKind("deep")}>
-                    <span className="scan-label">DEEP AUDIT</span>
-                    <strong>Whole-codebase investigation</strong>
-                    <p>Reviews every supported text file in contiguous chunks, records line coverage, maps imports and challenges the combined evidence.</p>
-                  </button>
-                </div>
+                {viewMode === "expert" ? (
+                  <div className="scan-cards">
+                    <button type="button" aria-pressed={scanKind === "quick"} className={`scan-card ${scanKind === "quick" ? "selected" : ""}`} onClick={() => setScanKind("quick")}>
+                      <span className="scan-label">QUICK SCAN</span>
+                      <strong>Focused security pass</strong>
+                      <p>Reviews up to 18 high-signal files. Good before deployment or after a small feature.</p>
+                    </button>
+                    <button type="button" aria-pressed={scanKind === "deep"} className={`scan-card ${scanKind === "deep" ? "selected" : ""}`} onClick={() => setScanKind("deep")}>
+                      <span className="scan-label">DEEP AUDIT</span>
+                      <strong>Whole-codebase investigation</strong>
+                      <p>Reviews every supported text file in contiguous chunks, records line coverage, maps imports and challenges the combined evidence.</p>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="simple-repo-note">
+                    <strong>Ready to check {repoData.repository.fullName}</strong>
+                    <span>We look at the files most likely to contain security mistakes. Read-only — nothing is changed.</span>
+                  </div>
+                )}
 
                 <div className="scan-actions" hidden={scanKind === "deep"}>
                   <UseLayoutsStatusButton
                     busy={repoBusy}
                     disabled={repoBusy || !connected || (customScope && (selectedPaths.length === 0 || selectedPaths.length > scanLimit))}
-                    idleLabel="Start quick scan"
+                    idleLabel={viewMode === "simple" ? "Check this code" : "Start quick scan"}
                     busyLabel="Running security review…"
                     onClick={scanRepository}
                   />
                   <div className="progress-copy" aria-live="polite">{repoProgress || (connected ? "Ready to scan" : "Connect Cyberouter first")}</div>
                 </div>
 
-                <div className="repo-local-action" hidden={scanKind === "deep"}><div><strong>Local checks · no model required</strong><p>Review source patterns at the pinned commit and send observations to the casebook.</p></div><button type="button" className="ghost" disabled={repoBusy} onClick={runRepositoryRules}>Run local checks</button></div>
+                {viewMode === "expert" && <div className="repo-local-action" hidden={scanKind === "deep"}><div><strong>Local checks · no model required</strong><p>Review source patterns at the pinned commit and send observations to the casebook.</p></div><button type="button" className="ghost" disabled={repoBusy} onClick={runRepositoryRules}>Run local checks</button></div>}
+                {viewMode === "expert" && (
                 <div className="pr-row">
                   <div><span className="scan-label">PULL REQUEST REVIEW</span><p>Review only the code changed by a PR for new security regressions.</p></div>
                   <div className="pr-controls"><label className="sr-only" htmlFor="pull-request-number">Pull request number</label><input id="pull-request-number" type="number" min="1" value={prNumber} placeholder="PR #" onChange={(e) => setPrNumber(e.target.value)} /><button type="button" className="ghost" disabled={repoBusy || !connected} onClick={reviewPullRequest}>Review PR</button></div>
                 </div>
+                )}
 
-                <section className="scope-control" hidden={scanKind === "deep"} aria-labelledby="scope-title">
+                <section className="scope-control" hidden={scanKind === "deep" || viewMode === "simple"} aria-labelledby="scope-title">
                   <div className="scope-head">
                     <div>
                       <span className="section-caption">COVERAGE</span>
@@ -1239,7 +1356,7 @@ export default function Home() {
 
       <FullAudit visible={surface === "repositories" && scanKind === "deep"} repositoryData={repoData} connected={connected} model={model} githubApi={githubApi} modelCall={modelCall} intelligence={intelligence} onCapture={openCase} onReport={({ text, meta }) => { setResult(text); setReportMeta(meta); setResultSource("repo"); setResultNotice(meta.scope); setUsage(null); }} />
       <DeepWebsite visible={surface === "website"} target={siteTarget} token={siteToken} authorized={siteAuthorized} connected={connected} siteApi={siteApi} onEvidence={setSiteScan} onCapture={openCase} />
-      <section className="panel output-panel" hidden={["casebook", "research"].includes(surface)} aria-labelledby="report-heading">
+      <section className="panel output-panel" hidden={["casebook", "research", "home"].includes(surface)} aria-labelledby="report-heading">
         <div className="panel-head">
           <div><span className="step">REPORT</span><h2 id="report-heading">{reportTitle}</h2></div>
           {usage && <div className="usage">{usage.prompt_tokens != null && <span>In {usage.prompt_tokens.toLocaleString()}</span>}{usage.completion_tokens != null && <span>Out {usage.completion_tokens.toLocaleString()}</span>}{usage.total_tokens != null && <span>Total {usage.total_tokens.toLocaleString()}</span>}</div>}
@@ -1256,6 +1373,7 @@ export default function Home() {
                 {resultSource === "repo" && reportMeta?.kind !== "repo-whole" && latestScan && repoData && <span className="coverage-chip">{latestScan.files} of {repoData.tree.reviewableFiles} reviewable files</span>}
               </div>
               <div className="report-actions">
+                {viewMode === "simple" && connected && <button type="button" className="ghost" disabled={explaining || busy} onClick={explainReport}>{explaining ? "Writing…" : resultPlain ? "Re-explain simply" : "Explain simply"}</button>}
                 {reportMeta && <button type="button" className="primary" disabled={captureBusy || repoBusy || siteBusy || busy} onClick={() => captureReport(true)}>{captureBusy ? "Capturing…" : "Extract to casebook"}</button>}
                 {reportMeta && <button type="button" className="ghost" disabled={captureBusy || repoBusy || siteBusy || busy} onClick={() => captureReport(false)}>{reportMeta.observations ? "Capture web observations" : "Save report as case"}</button>}
               <UseLayoutsDynamicToolbar
@@ -1266,6 +1384,17 @@ export default function Home() {
               />
               </div>
             </div>
+            {resultPlain && (
+              <div className="plain-report" role="note">
+                <div className="plain-report-head">
+                  <strong>In plain English</strong>
+                  <button type="button" className="text-button" onClick={() => setResultPlain("")}>Hide</button>
+                </div>
+                <article className="markdown-report">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{resultPlain}</ReactMarkdown>
+                </article>
+              </div>
+            )}
             {resultSource === "repo" && reportMeta?.kind !== "repo-whole" && latestScan && repoData && latestScan.files < repoData.tree.reviewableFiles && (
               <div className="coverage-note">
                 <strong>Coverage note</strong>

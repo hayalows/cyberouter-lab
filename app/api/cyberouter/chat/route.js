@@ -7,12 +7,16 @@ import {
   validateMessages,
 } from "@/lib/cyberouter";
 import { redactSensitiveText } from "@/lib/sensitive-content";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
 export async function POST(request) {
+  const limited = rateLimit(request, { name: "chat", limit: 20, windowMs: 60_000 });
+  if (!limited.ok) return rateLimitResponse(limited.retryAfterSeconds);
+
   const key = keyFromRequest(request);
 
   let payload;

@@ -5,7 +5,8 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "test:e2e": "node test/e2e.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/server": "^2.0.0",

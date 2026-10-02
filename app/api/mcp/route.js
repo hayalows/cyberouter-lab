@@ -3,6 +3,7 @@ import { z } from "zod";
 import { buildChatBody, cyberouterFetch, errorMessage, validateKey } from "@/lib/cyberouter";
 import { auditPublicSite } from "@/lib/site-audit";
 import { redactSensitiveText } from "@/lib/sensitive-content";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -141,18 +142,27 @@ const handler = createMcpHandler((server) => {
   serverInfo: { name: "cyberouter-lab", version: "1.0.0" },
 });
 
-const verifyToken = async (_request, bearerToken) => {
-  if (!validateKey(bearerToken || "")) return undefined;
+const verifyToken = async (request, bearerToken) => {
+  const limited = rateLimit(request, { name: "mcp", limit: 30, windowMs: 60_000 });
+  if (!limited.ok) return rateLimitResponse(limited.retryAfterSeconds);
+
+  const token = String(bearerToken || "");
+  if (!validateKey(token)) return undefined;
+
+  // Validate the key against the fixed upstream before granting any access.
+  const check = await cyberouterFetch("/models", { key: token, timeoutMs: 15000 });
+  if (!check.ok) return undefined;
+
   return {
-    token: bearerToken,
-    scopes: ["cyberouter:use"],
+    token,
+    scopes: ["cyberouter:models", "cyberouter:chat", "cyberouter:web-audit"],
     clientId: "cyberouter-user",
   };
 };
 
 const authHandler = withMcpAuth(handler, verifyToken, {
   required: true,
-  requiredScopes: ["cyberouter:use"],
+  requiredScopes: ["cyberouter:models", "cyberouter:chat", "cyberouter:web-audit"],
   resourceMetadataPath: "/.well-known/oauth-protected-resource",
 });
 

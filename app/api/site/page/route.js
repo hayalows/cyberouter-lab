@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
 import { auditOwnedPage } from "@/lib/site-audit";
 import { cyberouterFetch, keyFromRequest, errorMessage } from "@/lib/cyberouter";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 export async function POST(request) {
+  const limited = rateLimit(request, { name: "site-page", limit: 8, windowMs: 60_000 });
+  if (!limited.ok) return rateLimitResponse(limited.retryAfterSeconds);
   const json = (data, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
   let payload; try { payload = await request.json(); } catch { return json({ error: "Use valid JSON." }, 400); }
   if (typeof payload?.target !== "string" || payload.target.length > 2000 || typeof payload?.page !== "string" || payload.page.length > 2000 || payload.authorized !== true || !/^cyberouter-[a-z0-9-]{16,120}$/i.test(payload.authorizationToken || "")) return json({ error: "An extended crawl needs a target, same-host page, ownership token and explicit authorization." }, 400);

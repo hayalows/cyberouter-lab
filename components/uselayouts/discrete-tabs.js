@@ -11,6 +11,7 @@ import {
 } from "@hugeicons/core-free-icons";
 
 const DEFAULT_ITEMS = [
+  { id: "home", label: "Home", hint: "Start", icon: DashboardSquare01Icon },
   { id: "repositories", label: "Repositories", hint: "Source", icon: Folder02Icon },
   { id: "website", label: "Website", hint: "Live", icon: DashboardSquare01Icon },
   { id: "playground", label: "Playground", hint: "Prompt", icon: Message01Icon },

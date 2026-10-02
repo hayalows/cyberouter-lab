@@ -3,11 +3,14 @@ import { decodeBase64Content, githubError, githubJson, githubTokenFromRequest } 
 import { DEEP_FILE_BYTES, exclusionReason, nextChunk, sourceFacts } from "@/lib/deep-audit";
 import { redactSensitiveText } from "@/lib/sensitive-content";
 import { scanLocalRules } from "@/lib/security-casebook";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 const json = (data, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "no-store, max-age=0" } });
 export async function GET(request) {
+  const limited = rateLimit(request, { name: "gh-chunk", limit: 60, windowMs: 60_000 });
+  if (!limited.ok) return rateLimitResponse(limited.retryAfterSeconds);
   const q = new URL(request.url).searchParams; const owner = q.get("owner"), repo = q.get("repo"), commit = q.get("commit"), path = q.get("path"), offset = Number(q.get("offset") || 0);
   if (!/^[A-Za-z0-9_.-]+$/.test(owner || "") || !/^[A-Za-z0-9_.-]+$/.test(repo || "") || !/^[a-f0-9]{40}$/.test(commit || "") || !path || path.length > 1000 || path.startsWith("/") || path.split("/").some(p => p === ".." || !p) || !Number.isInteger(offset) || offset < 0 || offset > 2_000_000) return json({ error: "Supply a repository, pinned commit, relative file path and valid offset." }, 400);
   const result = await githubJson(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${path.split("/").map(encodeURIComponent).join("/")}?ref=${commit}`, { token: githubTokenFromRequest(request) });

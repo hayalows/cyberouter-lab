@@ -2,6 +2,24 @@
 
 A Vercel-hosted security workspace for Enclave Cyberouter.
 
+## Simple mode (for non-technical users)
+
+The interface defaults to **Simple** view, aimed at a person with no security
+background:
+
+- a Home screen with two large actions — **Check my website** and **Check my code**
+- a three-step first-run wizard (what this is, connect your key, choose a task)
+- website checks return a **0–100 score and a letter grade**, a one-sentence
+  verdict, and a plain-language **"What to do next"** list
+- every deterministic finding is translated into what it means and what to do
+- **Explain simply** rewrites any technical report for a business owner
+- **Print / save PDF** produces a clean one-page report
+- advanced controls (model choice, deep audit, PR review, custom scope, raw
+  headers) are hidden until you switch the top-bar toggle to **Expert**
+
+Switching modes is per-device and never loses your work. Expert view is the
+full workbench described below.
+
 ## Current capabilities
 
 - load the live Cyberouter model catalogue from your own key
@@ -21,6 +39,19 @@ A Vercel-hosted security workspace for Enclave Cyberouter.
 ## Security and credential handling
 
 No API keys or GitHub tokens are committed to this repository.
+
+Hardening in place:
+
+- a Content-Security-Policy and HSTS are served on all routes (`vercel.json`),
+  limiting the impact of any injected script and forcing HTTPS
+- every API route applies a best-effort per-IP rate limit (`lib/rate-limit.js`);
+  this is per-instance and bounds casual abuse, not a distributed attack
+- the website scanner resolves a target once and connects to the **validated IP**
+  (`lib/site-audit.js`), closing the DNS-rebinding gap between check and request
+- MCP access validates the bearer key against the fixed upstream before granting
+  any scope; scopes are honest labels, not decoration
+- `test/e2e.mjs` asserts the SSRF boundary (localhost, private/reserved IPv4 and
+  IPv6, cloud metadata, non-standard ports, credentials-in-URL) and runs in CI
 
 Cyberouter key:
 - sessionStorage by default

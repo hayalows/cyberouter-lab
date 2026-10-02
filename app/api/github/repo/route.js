@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { buildManifest, MAX_MANIFEST } from "@/lib/deep-audit";
 import { githubError, githubJson, githubTokenFromRequest, rankTree } from "@/lib/github";
+import { rateLimit, rateLimitResponse } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request) {
+  const limited = rateLimit(request, { name: "gh-repo", limit: 12, windowMs: 60_000 });
+  if (!limited.ok) return rateLimitResponse(limited.retryAfterSeconds);
+
   const url = new URL(request.url);
   const owner = url.searchParams.get("owner")?.trim();
   const repo = url.searchParams.get("repo")?.trim();
